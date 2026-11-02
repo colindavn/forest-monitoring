@@ -39,7 +39,7 @@ check-release:
 	uv run forestfr check-release
 
 api:
-	uv run uvicorn app.main:app --app-dir api --reload --port 8000
+	uv run uvicorn app.main:app_from_env --factory --app-dir api --reload --port 8000
 
 web:
 	cd web && pnpm dev
