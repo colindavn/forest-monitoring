@@ -40,3 +40,26 @@ def france(db: Db, threshold: Threshold = 30) -> dict[str, Any]:
         "area": area_or_404(db, threshold, "france", "FR"),
         "children": kpis(db, threshold, "level = 'region'", []),
     }
+
+
+def parent_ref(db: Database, threshold: int, level: str, code: str) -> dict[str, Any]:
+    p = area_or_404(db, threshold, level, code)
+    return {"level": level, "code": p["code"], "name": p["name"]}
+
+
+@router.get("/regions/{code}")
+def region(db: Db, code: str, threshold: Threshold = 30) -> dict[str, Any]:
+    check_threshold(threshold)
+    area = area_or_404(db, threshold, "region", code)
+    return {
+        "area": area,
+        "parent": parent_ref(db, threshold, "france", area["parent_code"]),
+        "children": kpis(db, threshold, "level = 'department' and parent_code = ?", [code]),
+    }
+
+
+@router.get("/departments/{code}")
+def department(db: Db, code: str, threshold: Threshold = 30) -> dict[str, Any]:
+    check_threshold(threshold)
+    area = area_or_404(db, threshold, "department", code)
+    return {"area": area, "parent": parent_ref(db, threshold, "region", area["parent_code"])}
