@@ -1,0 +1,28 @@
+# Data (warehouse, raw downloads)
+data/
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+logs/
+
+# Node
+node_modules/
+web/dist/
+*.tsbuildinfo
+
+# Env / local
+.env
+.claude/settings.local.json
+.DS_Store

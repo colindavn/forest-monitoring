@@ -1,0 +1,47 @@
+[project]
+name = "forest-monitoring"
+version = "0.1.0"
+description = "Forest loss monitor for France — workspace root"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["pipeline", "api"]
+
+[tool.uv.sources]
+forestfr = { workspace = true }
+forestfr-api = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "forestfr",
+    "forestfr-api",
+    "pytest>=8",
+    "respx>=0.21",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "dbt-core>=1.8",
+    "dbt-duckdb>=1.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["dbt", "web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+packages = ["forestfr", "app"]
+mypy_path = ["pipeline", "api"]
+
+[tool.pytest.ini_options]
+testpaths = ["pipeline/tests", "api/tests"]
+addopts = "-q --import-mode=importlib"
