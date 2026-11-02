@@ -78,3 +78,36 @@ models:
         description: Tree cover loss area (ha) within forest at this threshold.
       - name: source_version
         description: Hansen GEE asset id (or SYNTHETIC for demo data).
+
+  - name: stg_gfw__dist_alerts
+    description: >
+      DIST-ALERT (UMD GLAD / NASA OPERA, via GFW Data API) disturbance area per département,
+      threshold, day and confidence, restricted to forest pixels (tree cover 2000 >= threshold).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [code, threshold, alert_date, confidence]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "alert_date <= {{ today() }}"
+    columns:
+      - name: code
+        description: INSEE département code.
+        data_tests: [not_null]
+      - name: threshold
+        description: Forest definition, treecover2000 >= threshold (%).
+      - name: alert_date
+        description: Date the disturbance was detected.
+      - name: confidence_code
+        description: Raw GFW confidence code (2 nominal, 3 high, 4 highest).
+      - name: confidence
+        description: Confidence label.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [nominal, high, highest]
+      - name: area_ha
+        description: Alert area (ha).
+      - name: source_version
+        description: GFW dataset version (e.g. v20261031) or SYNTHETIC.

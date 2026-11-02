@@ -158,6 +158,37 @@ def test_region_and_france_rows_are_sums_of_departments(
     ]
 
 
+def test_weekly_alerts_split_by_confidence_with_rolling_sum(
+    marts: duckdb.DuckDBPyConnection,
+) -> None:
+    assert rows(
+        marts,
+        "select week_start, area_ha_nominal, area_ha_high, area_ha_highest, area_ha_high_conf, "
+        "area_ha_all, area_ha_4w_rolling from marts.fct_alerts_week "
+        "where level = 'department' and code = '38' and threshold = 30 order by week_start",
+    ) == [
+        (ALERT_WEEKS[0], 1.0, 2.0, 3.0, 5.0, 6.0, 6.0),
+        (ALERT_WEEKS[1], 1.0, 2.0, 3.0, 5.0, 6.0, 12.0),
+        (ALERT_WEEKS[2], 0.0, 0.0, 0.0, 0.0, 0.0, 12.0),  # week without alerts is zero-filled
+        (ALERT_WEEKS[3], 1.0, 2.0, 3.0, 5.0, 6.0, 18.0),
+    ]
+
+
+def test_weekly_alerts_roll_up_to_region_and_france(marts: duckdb.DuckDBPyConnection) -> None:
+    assert rows(
+        marts,
+        "select level, code, sum(area_ha_all) from marts.fct_alerts_week "
+        "where threshold = 30 group by 1, 2 order by 1, 2",
+    ) == [
+        ("department", "01", 0.0),
+        ("department", "2A", 0.0),
+        ("department", "38", 18.0),
+        ("france", "FR", 18.0),
+        ("region", "84", 18.0),
+        ("region", "94", 0.0),
+    ]
+
+
 def test_loss_rates_and_rolling_metrics(marts: duckdb.DuckDBPyConnection) -> None:
     (pct, yoy, avg5) = rows(
         marts,

@@ -20,3 +20,25 @@ models:
         description: Forest area in 2000 (ha) at this threshold.
       - name: loss_ha
         description: Tree cover loss (ha); 0 when no loss was recorded.
+
+  - name: int_alerts__dept_week
+    description: >
+      Département × threshold × ISO week (Monday start) alert area by confidence, zero-filled
+      over the full week range.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [code, threshold, week_start]
+    columns:
+      - name: week_start
+        description: Monday of the ISO week.
+      - name: area_ha_nominal
+        description: Nominal-confidence alert area (ha).
+      - name: area_ha_high
+        description: High-confidence alert area (ha).
+      - name: area_ha_highest
+        description: Highest-confidence alert area (ha).
+      - name: area_ha_high_conf
+        description: High + highest confidence (ha).
+      - name: area_ha_all
+        description: All confidence levels (ha).
