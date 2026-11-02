@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: int_loss__dept_year
+    description: >
+      Département × threshold × year loss, zero-filled for years without loss, joined with
+      the 2000 forest extent at the same threshold.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [code, threshold, year]
+    columns:
+      - name: code
+        description: INSEE département code.
+      - name: threshold
+        description: Forest definition, treecover2000 >= threshold (%).
+      - name: year
+        description: Loss year.
+      - name: forest_2000_ha
+        description: Forest area in 2000 (ha) at this threshold.
+      - name: loss_ha
+        description: Tree cover loss (ha); 0 when no loss was recorded.

@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: fct_loss_year
+    description: >
+      Annual Hansen tree cover loss for France, régions and départements, per forest threshold
+      (treecover2000 >= threshold %). Région and France rows are sums of département rows.
+      Tree cover loss is not deforestation.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [level, code, threshold, year]
+    columns:
+      - name: level
+        description: Aggregation level.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [france, region, department]
+      - name: code
+        description: INSEE code of the area (FR for France). Unique only together with level.
+        data_tests: [not_null]
+      - name: parent_code
+        description: Code of the parent area (région for a département, FR for a région).
+      - name: threshold
+        description: Forest definition, treecover2000 >= threshold (%).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [10, 30, 50]
+      - name: year
+        description: Loss year.
+      - name: forest_2000_ha
+        description: Forest area in 2000 (ha) at this threshold.
+      - name: loss_ha
+        description: Tree cover loss (ha) this year.
+      - name: loss_pct_of_2000
+        description: loss_ha / forest_2000_ha (ratio, not percent).
+      - name: cum_loss_ha
+        description: Cumulative loss since 2001 (ha).
+      - name: loss_ha_5y_avg
+        description: Average loss over this year and the 4 previous years (ha).
+      - name: yoy_change_pct
+        description: Change vs previous year, as a ratio; null when previous year is 0.

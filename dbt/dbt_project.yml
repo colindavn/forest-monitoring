@@ -16,6 +16,8 @@ vars:
   default_threshold: 30
   first_loss_year: 2001
   alerts_start_date: "2023-01-01"
+  expected_department_count: 96
+  today: null # override in tests; null → current_date
 
 models:
   forest_monitoring:

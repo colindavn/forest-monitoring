@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: >
+      Raw aggregates loaded by the `forestfr` Python extractors. Codes are INSEE codes kept as
+      strings ("01", "2A"). Every table carries `_source_version` and `_loaded_at`.
+    tables:
+      - name: admin_areas
+        description: ADMIN-EXPRESS COG CARTO boundaries (admin_level 1 = région, 2 = département).
+        columns:
+          - name: code
+            data_tests: [not_null]
+      - name: hansen_forest_extent
+        description: >
+          Hansen/UMD tree cover 2000 area (ha) per département where treecover2000 >= threshold.
+      - name: hansen_loss
+        description: >
+          Hansen/UMD annual tree cover loss (ha) per département, restricted to treecover2000 >=
+          threshold. Tree cover loss is not deforestation (harvest, fire, storms, dieback).
+      - name: dist_alerts_day
+        description: >
+          GFW DIST-ALERT area (ha) per département, day and confidence code (2/3/4), restricted to
+          forest pixels (tree cover 2000 >= threshold).
+        loaded_at_field: _loaded_at
+        freshness:
+          warn_after: { count: 10, period: day }
+          error_after: { count: 21, period: day }

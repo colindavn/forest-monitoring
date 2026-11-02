@@ -1,0 +1,80 @@
+version: 2
+
+models:
+  - name: stg_admin__regions
+    description: Metropolitan régions (ADMIN-EXPRESS COG CARTO), one row per région.
+    columns:
+      - name: code
+        description: INSEE région code (string, e.g. "84").
+        data_tests: [unique, not_null]
+      - name: name
+        description: Official région name.
+      - name: country
+        description: ISO country code (FR).
+      - name: area_km2
+        description: Land area in km², computed in Lambert-93.
+
+  - name: stg_admin__departments
+    description: Metropolitan départements, one row per département.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "(select count(*) from {{ ref('stg_admin__departments') }}) = {{ var('expected_department_count') }}"
+    columns:
+      - name: code
+        description: INSEE département code (string, e.g. "01", "2A").
+        data_tests: [unique, not_null]
+      - name: name
+        description: Official département name.
+      - name: region_code
+        description: INSEE code of the parent région.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_admin__regions')
+                field: code
+      - name: area_km2
+        description: Land area in km², computed in Lambert-93.
+
+  - name: stg_hansen__forest_extent
+    description: >
+      Hansen tree cover 2000 area (ha) per département and forest threshold (% canopy cover).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [code, threshold]
+    columns:
+      - name: code
+        description: INSEE département code.
+        data_tests: [not_null]
+      - name: threshold
+        description: Forest definition, treecover2000 >= threshold (%).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [10, 30, 50]
+      - name: forest_2000_ha
+        description: Area (ha) with treecover2000 >= threshold.
+      - name: source_version
+        description: Hansen GEE asset id (or SYNTHETIC for demo data).
+
+  - name: stg_hansen__loss
+    description: >
+      Hansen annual tree cover loss (ha) per département, threshold and year. Tree cover loss
+      is not deforestation: in France it is mostly harvesting, fires, storms and dieback.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [code, threshold, year]
+    columns:
+      - name: code
+        description: INSEE département code.
+        data_tests: [not_null]
+      - name: threshold
+        description: Forest definition, treecover2000 >= threshold (%).
+      - name: year
+        description: Loss year (2001 → latest Hansen year).
+      - name: loss_ha
+        description: Tree cover loss area (ha) within forest at this threshold.
+      - name: source_version
+        description: Hansen GEE asset id (or SYNTHETIC for demo data).
