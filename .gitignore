@@ -26,3 +26,4 @@ web/dist/
 .env
 .claude/settings.local.json
 .DS_Store
+dbt/.user.yml
