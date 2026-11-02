@@ -1,4 +1,5 @@
 const MISSING = '—'
+const NBSP = String.fromCharCode(0xa0)
 
 const haSmall = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 })
 const haLarge = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
@@ -12,7 +13,7 @@ const pct = new Intl.NumberFormat('fr-FR', {
 export function formatHa(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return MISSING
   const fmt = Math.abs(value) >= 100_000 ? haLarge : haSmall
-  return `${fmt.format(value)} ha`
+  return `${fmt.format(value)}${NBSP}ha`
 }
 
 /** Ratio (0.0123) as French percentage, e.g. "1,23 %". */
