@@ -402,3 +402,8 @@ Resolves §12.
 9. **Synthetic demo data**: `forestfr demo-data` writes raw tables from real boundaries with fake numbers, `_source_version = 'SYNTHETIC'`. The UI shows a banner when synthetic data is served; release publishing fails if any synthetic row is present. It is also the API test fixture.
 10. **Boundaries**: simplified GeoJSON is committed to `web/public/geo/` so the front end works from a fresh clone.
 11. **Confidence**: 3 levels kept end to end (`nominal` / `high` / `highest`); `area_ha_high_conf` = high + highest.
+12. **Raw table names** (supersede §4/§6 names, follow decision 3). All carry `_source_version` (replaces `gfc_version` / `dataset_version`) and `_loaded_at`:
+    - `raw.admin_areas(country, admin_level, code, parent_code, name, area_km2, geom_wkb)`: `admin_level` 1 = région, 2 = département.
+    - `raw.hansen_forest_extent(country, code, threshold, forest_2000_ha)`
+    - `raw.hansen_loss(country, code, threshold, year, loss_ha)`
+    - `raw.dist_alerts_day(country, code, threshold, alert_date, confidence_code, area_ha)`
