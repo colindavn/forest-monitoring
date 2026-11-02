@@ -1,7 +1,7 @@
 # Forest Loss Monitor France — Project Specification
 
 > Audience: Claude Code (implementation agent) and the project owner.
-> Status: v1 spec, 2 Nov 2026. Items marked **[VERIFY]** are facts (asset IDs, field names, URLs) that must be checked against the live service before coding against them — do not assume they are correct.
+> Status: v1.1 spec, 2 Nov 2026. Former **[VERIFY]** items were checked against live services on 2026-11-02 and are now marked **[VERIFIED 2026-11-02]**; see `CHANGELOG.md` for differences from v1. Owner decisions from the design review are recorded in §15.
 
 ---
 
@@ -47,34 +47,47 @@ In France, satellite "tree cover loss" is **not deforestation**: France's forest
 ## 3. Data sources
 
 ### 3.1 Boundaries (reference)
-- **IGN ADMIN-EXPRESS COG CARTO** (generalised, official INSEE codes), from the IGN Géoplateforme / data.gouv.fr. **[VERIFY latest edition + download URL]**
-  - Use layers `REGION` and `DEPARTEMENT`, metropolitan France only (13 régions, 96 départements incl. 2A/2B).
-  - Keys: `INSEE_REG` (e.g. `"84"`), `INSEE_DEP` (e.g. `"01"`, `"2A"`). **Always treat codes as strings.**
+- **IGN ADMIN-EXPRESS COG CARTO** (generalised, official INSEE codes), from the IGN Géoplateforme. **[VERIFIED 2026-11-02]** Edition **4.0 (2026-01-01)**. Source format: France-wide **FlatGeobuf, WGS84 (EPSG:4326)**, one file per layer, no archive:
+  - `https://data.geopf.fr/telechargement/download/ADMIN-EXPRESS-COG-CARTO/ADMIN-EXPRESS-COG-CARTO_4-0__FLATGEOBUF_WGS84G_FRA_2026-01-01/region.fgb` (~7.6 MB)
+  - `.../departement.fgb` (~12.9 MB)
+  - Layers `region` and `departement` (lowercase since 4.0). Fields: `code_insee`, `nom_officiel`, and on `departement` also `code_insee_de_la_region`. The 3.x names `INSEE_REG` / `INSEE_DEP` / `NOM` no longer exist.
+  - Files include DROM → filter to metropolitan France (13 régions, 96 départements incl. 2A/2B).
+  - Internally the keys are named `insee_reg` (e.g. `"84"`) and `insee_dep` (e.g. `"01"`, `"2A"`). **Always treat codes as strings.**
+  - Areas are computed in Lambert-93 (EPSG:2154).
 - Two geometry versions:
   - full-resolution (for zonal stats, uploaded to GEE as an asset);
   - simplified (topology-preserving, ~1–2 % of vertices) GeoJSON/TopoJSON for the web map.
 
 ### 3.2 Annual tree cover loss — Hansen / UMD Global Forest Change
 - 30 m, Landsat-based, years 2001–2025 (2025 released April 2026).
-- Google Earth Engine asset: `UMD/hansen/global_forest_change_2025_v1_13` **[VERIFY exact latest ID in the GEE catalog]**.
-- Bands used: `treecover2000` (0–100 %), `lossyear` (1–25 → 2001–2025), `loss`.
-- **Forest definition (configurable, default):** `treecover2000 >= 30` %. Expose the threshold as a pipeline parameter (allowed: 10, 15, 20, 25, 30, 50, 75).
-- Optional companion: **Tree cover loss from fires** (UMD) to split fire vs non-fire loss — GFW dataset `umd_tree_cover_loss_from_fires` **[VERIFY availability in GEE or via GFW API]**. Phase 2.
+- Google Earth Engine asset: `UMD/hansen/global_forest_change_2025_v1_13` **[VERIFIED 2026-11-02 — latest; no 2026_v1_14 yet]**.
+- Bands used: `treecover2000` (0–100 %), `lossyear` (0 = no loss, 1–25 → 2001–2025), `loss`; `datamask` (1 = land) available.
+- **Forest definition (configurable, default):** `treecover2000 >= 30` %. Expose the threshold as a pipeline parameter (allowed: 10, 15, 20, 25, 30, 50, 75). **v1 computes 10, 30 and 50**; UI offers a 3-option threshold toggle (default 30).
+- Optional companion: **Tree cover loss from fires** (UMD) to split fire vs non-fire loss — GFW dataset `umd_tree_cover_loss_from_fires` **[VERIFIED: exists on GFW Data API, v1.13; tiles available]**. Phase 2.
 
 ### 3.3 Near-real-time disturbance — DIST-ALERT (UMD / NASA OPERA)
 - 30 m, from Harmonized Landsat-Sentinel-2 (HLS), alerts every 2–4 days, global, record starts 2023.
-- Access for stats: **GFW Data API** dataset `umd_glad_dist_alerts` queried with a département geometry (requires a free GFW API key, header `x-api-key`). **[VERIFY dataset name, version, field names: e.g. date field, confidence field, `area__ha`]**
+- Access for stats: **GFW Data API** dataset `umd_glad_dist_alerts` queried with a département geometry (requires a free GFW API key, header `x-api-key`; queries without key → 403). **[VERIFIED 2026-11-02]**
+  - Version: `latest` redirects (307) to a weekly version, e.g. `v20261031`. Resolve and store the concrete version.
+  - Query: `POST /dataset/umd_glad_dist_alerts/{version}/query/json`, body `{"sql": "...", "geometry": <GeoJSON geometry>}`; table name in SQL is `results`.
+  - Fields: date `umd_glad_dist_alerts__date`, confidence `umd_glad_dist_alerts__confidence` (**2 = nominal, 3 = high, 4 = highest**), area `area__ha`, forest filter `umd_tree_cover_density_2000__threshold` (coded class: 1=10, 2=15, 3=20, 4=25, 5=30, 6=50, 7=75 %).
 - Fallback access: OPERA `OPERA_L3_DIST-ALERT-HLS_V1` COGs from NASA LP DAAC via `earthaccess` (heavier; only if the GFW API route fails).
-- Store **per département × day × confidence** areas; weekly rollups are done in dbt.
+- Store **per département × threshold × day × confidence** areas, keeping **3 confidence levels** (`nominal`, `high`, `highest`); weekly rollups are done in dbt.
 
 ### 3.4 Forest baseline / context (optional, phase 2)
 - **IGN BD Forêt v2** (official French forest map) as an alternative forest mask.
 - **European Forest Disturbance Atlas (EFDA) v2.1.1**, Zenodo DOI 10.5281/zenodo.13333034: annual disturbances 1985–2023 with agent (harvest / wind–bark beetle / fire). Gives the "why" behind loss peaks (e.g. 2022 Gironde fires, Grand-Est bark beetle).
 
 ### 3.5 Map display layers (no storage)
-- Hansen loss tiles: GFW tile service, e.g. `https://tiles.globalforestwatch.org/umd_tree_cover_loss/latest/dynamic/{z}/{x}/{y}.png?start_year=…&end_year=…&tree_cover_density_threshold=30` **[VERIFY URL pattern and params]**.
-- DIST-ALERT tiles: GFW tile service for `umd_glad_dist_alerts` **[VERIFY URL]**.
-- Basemaps: IGN Géoplateforme WMTS (Plan IGN, orthophotos) and OSM as fallback.
+All tile endpoints below **[VERIFIED 2026-11-02]**: no key, `Access-Control-Allow-Origin: *`, `latest` 307-redirects to the concrete version.
+- Hansen loss tiles: `https://tiles.globalforestwatch.org/umd_tree_cover_loss/latest/dynamic/{z}/{x}/{y}.png?start_year=2001&end_year=2025&tree_cover_density_threshold=30` (threshold ∈ 0,10,15,20,25,30,50,75,90).
+- DIST-ALERT tiles: `https://tiles.globalforestwatch.org/umd_glad_dist_alerts/latest/dynamic/{z}/{x}/{y}.png?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&alert_confidence=low|high&tree_cover_density_threshold=30`.
+  - The parameter is `alert_confidence` (not `confidence`, which is silently ignored). UI toggle: "toutes" → `low`, "haute confiance" → `high`.
+  - Note: the tile tree-cover filter uses **2010** tree cover density, while statistics use **2000** → mention in "À propos".
+- Basemaps (IGN Géoplateforme WMTS, no key):
+  - Plan IGN v2: `https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`
+  - Orthophotos: same with `LAYER=ORTHOIMAGERY.ORTHOPHOTOS&FORMAT=image/jpeg`.
+  - OSM as fallback.
 
 ---
 
@@ -120,8 +133,11 @@ Data volume estimate: < 50 MB in DuckDB; geometry files < 5 MB.
 ## 5. Repository layout
 
 ```
-forest-loss-france/
+forest-monitoring/
 ├── README.md
+├── CHANGELOG.md
+├── LICENSE                      # MIT (code); data licences in §13
+├── docs/SETUP_CREDENTIALS.md    # GEE / GFW / GitHub secrets setup
 ├── SPEC.md                      # this file
 ├── Makefile
 ├── docker-compose.yml
@@ -165,8 +181,8 @@ forest-loss-france/
 All extractors are **idempotent** (re-running replaces the same keys) and write a `_loaded_at` timestamp and `_source_version` column.
 
 ### 6.1 `boundaries`
-1. Download ADMIN-EXPRESS COG CARTO; keep metropolitan régions (`INSEE_REG` not in `01,02,03,04,06`) and their départements.
-2. Reproject to EPSG:4326.
+1. Download ADMIN-EXPRESS COG CARTO FlatGeobuf (`region.fgb`, `departement.fgb`); keep metropolitan régions (`code_insee` not in `01,02,03,04,06`) and their départements.
+2. Source is already EPSG:4326; compute `area_km2` in EPSG:2154.
 3. Write `raw.admin_regions(insee_reg, nom, area_km2, geom_wkb)` and `raw.admin_departments(insee_dep, insee_reg, nom, area_km2, geom_wkb)`.
 4. Produce simplified `web/public/geo/regions.geojson` and `departments.geojson` with properties `code`, `name`, `parent_code`. Shared borders must stay aligned after simplification (use mapshaper/topojson).
 5. Upload full-resolution départements to GEE as `projects/<GEE_PROJECT>/assets/fr_departements`.
@@ -182,13 +198,13 @@ Run for the default threshold (30). Optionally loop all thresholds.
 Validation: France-wide sum should be close to GFW's France dashboard figure for the same threshold (tolerance ±5 %, boundary differences expected). Log the comparison.
 
 ### 6.3 `dist_alerts`
-- For each département, query the GFW Data API with the simplified (not web-simplified; ~100 m tolerance) département geometry:
-  `SELECT <date_field>, <confidence_field>, SUM(area__ha) FROM data WHERE <date_field> >= :since GROUP BY 1, 2` **[VERIFY field names via `/dataset/umd_glad_dist_alerts/<version>/fields`]**
-- Incremental: `since` = max date already loaded minus 30 days (alerts get confirmed/revised); upsert on `(insee_dep, alert_date, confidence)`.
+- For each département and each threshold (10, 30, 50), query the GFW Data API with the simplified (not web-simplified; ~100 m tolerance) département geometry:
+  `SELECT umd_glad_dist_alerts__date, umd_glad_dist_alerts__confidence, SUM(area__ha) FROM results WHERE umd_glad_dist_alerts__date >= '<since>' AND umd_tree_cover_density_2000__threshold >= <class> GROUP BY 1, 2` (class: 10→1, 30→5, 50→6). **[VERIFIED 2026-11-02]**
+- Incremental: `since` = max date already loaded minus 30 days (alerts get confirmed/revised); upsert on `(insee_dep, threshold, alert_date, confidence)`.
 - First run backfills from 2023-01-01.
 - Respect rate limits: sequential calls, retry with exponential backoff, 1 s pause between départements. If a geometry is too large for the API, split by a grid and sum.
-- Target table: `raw.dist_alerts_dept_day(insee_dep, alert_date, confidence, area_ha, dataset_version)`.
-- Optionally restrict to forest pixels by intersecting with tree cover ≥ threshold if the API allows a join/filter on a tree cover field **[VERIFY]**; otherwise label these as "vegetation disturbance alerts" in the UI.
+- Target table: `raw.dist_alerts_dept_day(insee_dep, threshold, alert_date, confidence_code, area_ha, dataset_version)`; `confidence_code` keeps the raw API value (2/3/4).
+- Alerts are restricted to forest pixels (tree cover 2000 ≥ threshold) via the API filter field above.
 
 ---
 
@@ -203,13 +219,13 @@ Naming: `stg_*` (1:1 cleaned sources), `int_*` (business logic), `fct_*`/`dim_*`
 | `stg_admin__departments` | département | + `insee_reg` FK |
 | `stg_hansen__forest_extent` | dept × threshold | |
 | `stg_hansen__loss` | dept × threshold × year | filter `year between 2001 and latest`, `loss_ha >= 0` |
-| `stg_gfw__dist_alerts` | dept × day × confidence | normalise confidence to `low`/`high` |
+| `stg_gfw__dist_alerts` | dept × threshold × day × confidence | map confidence code 2/3/4 → `nominal`/`high`/`highest` |
 
 ### 7.2 Intermediate
 | Model | Logic |
 |---|---|
 | `int_loss__dept_year` | join loss with forest extent; `loss_pct_of_2000 = loss_ha / forest_2000_ha`; `cum_loss_ha` (window sum by dept ordered by year); zero-fill missing years |
-| `int_alerts__dept_week` | ISO week rollup (`date_trunc('week')`), split by confidence, `area_ha_high_conf`, `area_ha_all` |
+| `int_alerts__dept_week` | ISO week rollup (`date_trunc('week')`), per threshold: `area_ha_nominal`, `area_ha_high`, `area_ha_highest`, `area_ha_high_conf` (= high + highest), `area_ha_all` |
 
 ### 7.3 Marts (read by the API)
 | Model | Grain | Columns (main) |
@@ -217,14 +233,14 @@ Naming: `stg_*` (1:1 cleaned sources), `int_*` (business logic), `fct_*`/`dim_*`
 | `dim_region` | région | `code, name, slug, area_km2, forest_2000_ha` |
 | `dim_department` | dept | `code, name, slug, region_code, area_km2, forest_2000_ha` |
 | `fct_loss_year` | level × code × year | `level` ∈ {`france`,`region`,`department`}, `code`, `year`, `loss_ha`, `loss_pct_of_2000`, `cum_loss_ha`, `loss_ha_5y_avg`, `yoy_change_pct`. Région and France rows are **sums of département rows** (never recomputed from rasters) so drill-down totals always add up. |
-| `fct_alerts_week` | level × code × week | `area_ha_all`, `area_ha_high_conf`, `area_ha_4w_rolling` |
+| `fct_alerts_week` | level × code × threshold × week | `area_ha_nominal`, `area_ha_high`, `area_ha_highest`, `area_ha_all`, `area_ha_high_conf`, `area_ha_4w_rolling` |
 | `mart_area_kpis` | level × code | latest-year loss, 5-yr average, 2001–latest total, % of 2000 forest lost, trend slope (linear regression on last 10 years), rank within parent level |
 | `mart_alert_anomalies` | level × code × week | z-score of weekly alert area vs same ISO week in previous years (only once ≥ 2 years of history), `is_anomaly` (z ≥ 2) |
 
 ### 7.4 Tests (dbt)
 - `unique` + `not_null` on all keys; `unique_combination_of_columns` on fact grains (dbt_utils).
 - `relationships`: department.region_code → dim_region.code.
-- `accepted_values`: level, confidence.
+- `accepted_values`: level, confidence (`nominal`, `high`, `highest`), threshold (10, 30, 50).
 - Custom: `loss_ha <= forest_2000_ha` per dept/year; sum of départements = région value in `fct_loss_year`; count of départements = 96; no future dates in alerts.
 - Source freshness on `raw.dist_alerts_dept_day` (warn after 10 days, error after 21).
 
@@ -276,7 +292,7 @@ Validation: 404 for unknown codes; 422 for bad params. CORS limited to the web o
 ### 9.3 Panel content (for the selected area)
 1. KPI cards: forest 2000 (ha), loss latest year (ha and %), total loss since 2001, trend (↑/↓ with slope), alerts last 4 weeks (ha).
 2. **Annual loss chart** (bars 2001–latest, with 5-year average line).
-3. **Weekly alerts chart** (bars per week since 2023, high-confidence stacked on low; anomaly weeks highlighted; 4-week rolling line).
+3. **Weekly alerts chart** (bars per week since 2023, 3 stacked segments: nominal / high / highest; anomaly weeks highlighted; 4-week rolling line).
 4. Ranking table of children (départements of a région, régions of France), sortable, click-through.
 5. CSV download of the series shown.
 
@@ -369,3 +385,20 @@ make all            # boundaries hansen alerts transform
 - Keep INSEE codes as strings everywhere (`"01"`, `"2A"`).
 - Write tests: pytest for extractors (mock GEE/GFW), dbt tests as listed, API tests with a small fixture DuckDB.
 - Prefer small, readable modules; type hints; `ruff` + `mypy` for Python, `eslint` + `prettier` for TS.
+- Work test-first (red → green), one commit per green cycle with a one-line message, straight to `main`, push at the end of each milestone.
+
+---
+
+## 15. Owner decisions (design review, 2 Nov 2026)
+Resolves §12.
+1. **Repo**: `forest-monitoring` (name kept to allow extension beyond France), public on GitHub, MIT licence.
+2. **Threshold**: compute 10 / 30 / 50 % for both Hansen loss and alerts; default 30; UI toggle.
+3. **Scope**: metropolitan France only in v1, but extractors and dbt use **generic admin-level naming** (`country`, `admin_level`, `parent_code`; `country: FR` in config) so other countries / DROM can be added later. API paths and UI stay French-specific (`/regions`, `/departments`).
+4. **Front end**: React + Vite + TypeScript + MapLibre GL + ECharts.
+5. **Hosting**: deferred. v1 ships Docker Compose (`api` + nginx `web` static build).
+6. **Warehouse distribution**: the weekly CI publishes `warehouse.duckdb` as a **GitHub Release asset**; the API container downloads the latest release on start if no local file is mounted.
+7. **GEE**: personal non-commercial Cloud project for local yearly `make hansen`; no GEE in CI for v1 (monthly workflow only checks the catalog for a new Hansen version).
+8. **Credentials**: none available at build time. CI workflows that need secrets exit cleanly with a notice when the secret is missing. Setup steps are in `docs/SETUP_CREDENTIALS.md`.
+9. **Synthetic demo data**: `forestfr demo-data` writes raw tables from real boundaries with fake numbers, `_source_version = 'SYNTHETIC'`. The UI shows a banner when synthetic data is served; release publishing fails if any synthetic row is present. It is also the API test fixture.
+10. **Boundaries**: simplified GeoJSON is committed to `web/public/geo/` so the front end works from a fresh clone.
+11. **Confidence**: 3 levels kept end to end (`nominal` / `high` / `highest`); `area_ha_high_conf` = high + highest.
