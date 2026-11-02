@@ -97,7 +97,23 @@ def alert_rows() -> list[dict[str, Any]]:
                     "area_ha": area,
                 }
             )
+    rows.extend(
+        {
+            "country": "FR",
+            "code": "2A",
+            "threshold": 30,
+            "alert_date": day,
+            "confidence_code": 3,
+            "area_ha": area,
+        }
+        for day, area in ANOMALY_HISTORY.items()
+    )
     return rows
+
+
+# Département 2A, ISO week 2 of three years: 2 ha, 4 ha, then 20 ha in 2025.
+# z(2025) = (20 - mean(2, 4)) / stddev_samp(2, 4) = 17 / sqrt(2)
+ANOMALY_HISTORY = {date(2023, 1, 9): 2.0, date(2024, 1, 8): 4.0, ALERT_WEEKS[0]: 20.0}
 
 
 @pytest.fixture(scope="module")
@@ -165,7 +181,8 @@ def test_weekly_alerts_split_by_confidence_with_rolling_sum(
         marts,
         "select week_start, area_ha_nominal, area_ha_high, area_ha_highest, area_ha_high_conf, "
         "area_ha_all, area_ha_4w_rolling from marts.fct_alerts_week "
-        "where level = 'department' and code = '38' and threshold = 30 order by week_start",
+        "where level = 'department' and code = '38' and threshold = 30 "
+        "and week_start >= '2025-01-06' order by week_start",
     ) == [
         (ALERT_WEEKS[0], 1.0, 2.0, 3.0, 5.0, 6.0, 6.0),
         (ALERT_WEEKS[1], 1.0, 2.0, 3.0, 5.0, 6.0, 12.0),
@@ -181,12 +198,28 @@ def test_weekly_alerts_roll_up_to_region_and_france(marts: duckdb.DuckDBPyConnec
         "where threshold = 30 group by 1, 2 order by 1, 2",
     ) == [
         ("department", "01", 0.0),
-        ("department", "2A", 0.0),
+        ("department", "2A", 26.0),
         ("department", "38", 18.0),
-        ("france", "FR", 18.0),
+        ("france", "FR", 44.0),
         ("region", "84", 18.0),
-        ("region", "94", 0.0),
+        ("region", "94", 26.0),
     ]
+
+
+def test_alert_anomaly_vs_same_iso_week_of_previous_years(
+    marts: duckdb.DuckDBPyConnection,
+) -> None:
+    result = rows(
+        marts,
+        "select week_start, history_years, z_score, is_anomaly from marts.mart_alert_anomalies "
+        "where level = 'department' and code = '2A' and threshold = 30 "
+        "and week_start in ('2023-01-09', '2024-01-08', '2025-01-06') order by week_start",
+    )
+    assert result[0] == (date(2023, 1, 9), 0, None, False)
+    assert result[1] == (date(2024, 1, 8), 1, None, False)  # needs >= 2 years of history
+    week, years, z, anomaly = result[2]
+    assert (week, years, anomaly) == (ALERT_WEEKS[0], 2, True)
+    assert z == pytest.approx(17 / 2**0.5)
 
 
 def test_dimensions_have_slugs_and_default_threshold_forest(
@@ -216,11 +249,11 @@ def test_area_kpis(marts: duckdb.DuckDBPyConnection) -> None:
     )
     assert [tuple(pytest.approx(v) if isinstance(v, float) else v for v in r) for r in kpis] == [
         ("department", "01", "Ain", 2003, 15.0, 20 / 3, 20.0, 5.0, 0.0, 2),
-        ("department", "2A", "Corse-du-Sud", 2003, 0.0, 4 / 3, 4.0, 0.0, 0.0, 1),
+        ("department", "2A", "Corse-du-Sud", 2003, 0.0, 4 / 3, 4.0, 0.0, 20.0, 1),
         ("department", "38", "Isère", 2003, 30.0, 20.0, 60.0, 10.0, 18.0, 1),
-        ("france", "FR", "France", 2003, 45.0, 28.0, 84.0, 15.0, 18.0, None),
+        ("france", "FR", "France", 2003, 45.0, 28.0, 84.0, 15.0, 38.0, None),
         ("region", "84", "Auvergne-Rhône-Alpes", 2003, 45.0, 80 / 3, 80.0, 15.0, 18.0, 1),
-        ("region", "94", "Corse", 2003, 0.0, 4 / 3, 4.0, 0.0, 0.0, 2),
+        ("region", "94", "Corse", 2003, 0.0, 4 / 3, 4.0, 0.0, 20.0, 2),
     ]
 
 

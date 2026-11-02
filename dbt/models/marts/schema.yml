@@ -164,3 +164,40 @@ models:
         description: All confidence levels (ha).
       - name: area_ha_4w_rolling
         description: Sum of area_ha_all over this week and the 3 previous weeks (ha).
+
+  - name: mart_alert_anomalies
+    description: >
+      Weekly alert area vs the same ISO week of previous years. The z-score is computed only
+      once at least 2 previous years exist; a week is an anomaly when z >= 2.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [level, code, threshold, week_start]
+    columns:
+      - name: level
+        description: Aggregation level (france, region, department).
+      - name: code
+        description: INSEE code of the area.
+      - name: parent_code
+        description: Code of the parent area.
+      - name: threshold
+        description: Forest definition, treecover2000 >= threshold (%).
+      - name: week_start
+        description: Monday of the ISO week.
+      - name: iso_year
+        description: ISO year of the week.
+      - name: iso_week
+        description: ISO week number (1-53).
+      - name: area_ha_all
+        description: Alert area this week, all confidence levels (ha).
+      - name: history_years
+        description: Number of previous years with the same ISO week.
+      - name: baseline_mean_ha
+        description: Mean area of the same ISO week in previous years (ha).
+      - name: baseline_std_ha
+        description: Sample standard deviation of that baseline (ha).
+      - name: z_score
+        description: (area - baseline mean) / baseline std; null with < 2 years of history.
+      - name: is_anomaly
+        description: True when z_score >= 2.
+        data_tests: [not_null]
