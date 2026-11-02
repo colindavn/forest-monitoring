@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 import geopandas as gpd
 import pandas as pd
+from topojson import Topology  # type: ignore[attr-defined]
 
 COUNTRY = "FR"
 OVERSEAS_REGIONS = {"01", "02", "03", "04", "06"}
@@ -39,3 +43,18 @@ def to_admin_areas(regions: gpd.GeoDataFrame, departements: gpd.GeoDataFrame) ->
     areas.insert(0, "country", COUNTRY)
     areas["area_km2"] = areas.geometry.to_crs(AREA_CRS).area / 1e6
     return areas
+
+
+def to_web_geojson(areas: gpd.GeoDataFrame, tolerance_deg: float = 0.005) -> dict[str, Any]:
+    """Topology-preserving simplification → GeoJSON FeatureCollection (code, name, parent_code).
+
+    Shared borders are simplified once (TopoJSON arcs), so neighbours stay aligned.
+    """
+    slim = areas[["code", "name", "parent_code", "geometry"]].to_crs("EPSG:4326")
+    topo = Topology(slim, prequantize=False, toposimplify=tolerance_deg, prevent_oversimplify=True)
+    fc: dict[str, Any] = json.loads(str(topo.to_geojson()))
+    for feature in fc["features"]:
+        props = feature["properties"]
+        feature["properties"] = {k: props[k] for k in ("code", "name", "parent_code")}
+        feature.pop("id", None)
+    return fc
