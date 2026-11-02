@@ -1,6 +1,90 @@
 version: 2
 
 models:
+  - name: dim_region
+    description: Metropolitan régions with forest extent at the default threshold (30 %).
+    columns:
+      - name: code
+        description: INSEE région code (string).
+        data_tests: [unique, not_null]
+      - name: name
+        description: Official région name.
+      - name: slug
+        description: URL-friendly name.
+        data_tests: [unique]
+      - name: area_km2
+        description: Land area (km²).
+      - name: forest_2000_ha
+        description: Hansen forest area in 2000 (ha), treecover2000 >= 30 %.
+
+  - name: dim_department
+    description: Metropolitan départements with forest extent at the default threshold (30 %).
+    columns:
+      - name: code
+        description: INSEE département code (string, e.g. "2A").
+        data_tests: [unique, not_null]
+      - name: name
+        description: Official département name.
+      - name: slug
+        description: URL-friendly name.
+        data_tests: [unique]
+      - name: region_code
+        description: Parent région code.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_region')
+                field: code
+      - name: area_km2
+        description: Land area (km²).
+      - name: forest_2000_ha
+        description: Hansen forest area in 2000 (ha), treecover2000 >= 30 %.
+
+  - name: mart_area_kpis
+    description: >
+      Headline indicators per level × area × forest threshold: latest-year loss, 5-year average,
+      total since 2001, share of 2000 forest lost, 10-year trend, alerts over the last 4 weeks,
+      and rank within the parent area (by latest-year loss). Loss is not deforestation.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [level, code, threshold]
+    columns:
+      - name: level
+        description: Aggregation level (france, region, department).
+      - name: code
+        description: INSEE code of the area (FR for France).
+      - name: name
+        description: Area name.
+        data_tests: [not_null]
+      - name: parent_code
+        description: Code of the parent area (null for France).
+      - name: threshold
+        description: Forest definition, treecover2000 >= threshold (%).
+      - name: forest_2000_ha
+        description: Forest area in 2000 (ha).
+      - name: latest_year
+        description: Latest Hansen loss year.
+      - name: loss_latest_ha
+        description: Loss in the latest year (ha).
+      - name: loss_latest_pct
+        description: Latest-year loss / forest 2000 (ratio).
+      - name: loss_5y_avg_ha
+        description: Average yearly loss over the 5 years ending at latest_year (ha).
+      - name: loss_total_ha
+        description: Total loss 2001 → latest_year (ha).
+      - name: loss_total_pct
+        description: Total loss / forest 2000 (ratio).
+      - name: trend_slope_ha_per_year
+        description: Linear regression slope of yearly loss over the last 10 years (ha/year).
+      - name: alerts_last_4w_ha
+        description: DIST-ALERT area over the 4 latest weeks (ha, all confidence levels).
+      - name: latest_alert_week
+        description: Monday of the latest alert week.
+      - name: rank_in_parent
+        description: Rank by latest-year loss among siblings (1 = most loss); null for France.
+
   - name: fct_loss_year
     description: >
       Annual Hansen tree cover loss for France, régions and départements, per forest threshold

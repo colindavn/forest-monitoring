@@ -189,6 +189,51 @@ def test_weekly_alerts_roll_up_to_region_and_france(marts: duckdb.DuckDBPyConnec
     ]
 
 
+def test_dimensions_have_slugs_and_default_threshold_forest(
+    marts: duckdb.DuckDBPyConnection,
+) -> None:
+    assert rows(
+        marts, "select code, name, slug, forest_2000_ha from marts.dim_region order by code"
+    ) == [
+        ("84", "Auvergne-Rhône-Alpes", "auvergne-rhone-alpes", 1500.0),
+        ("94", "Corse", "corse", 200.0),
+    ]
+    assert rows(
+        marts,
+        "select code, slug, region_code, forest_2000_ha from marts.dim_department "
+        "where code = '2A'",
+    ) == [("2A", "corse-du-sud", "94", 200.0)]
+
+
+def test_area_kpis(marts: duckdb.DuckDBPyConnection) -> None:
+    cols = (
+        "level, code, name, latest_year, loss_latest_ha, loss_5y_avg_ha, loss_total_ha, "
+        "trend_slope_ha_per_year, alerts_last_4w_ha, rank_in_parent"
+    )
+    kpis = rows(
+        marts,
+        f"select {cols} from marts.mart_area_kpis where threshold = 30 order by level, code",
+    )
+    assert [tuple(pytest.approx(v) if isinstance(v, float) else v for v in r) for r in kpis] == [
+        ("department", "01", "Ain", 2003, 15.0, 20 / 3, 20.0, 5.0, 0.0, 2),
+        ("department", "2A", "Corse-du-Sud", 2003, 0.0, 4 / 3, 4.0, 0.0, 0.0, 1),
+        ("department", "38", "Isère", 2003, 30.0, 20.0, 60.0, 10.0, 18.0, 1),
+        ("france", "FR", "France", 2003, 45.0, 28.0, 84.0, 15.0, 18.0, None),
+        ("region", "84", "Auvergne-Rhône-Alpes", 2003, 45.0, 80 / 3, 80.0, 15.0, 18.0, 1),
+        ("region", "94", "Corse", 2003, 0.0, 4 / 3, 4.0, 0.0, 0.0, 2),
+    ]
+
+
+def test_kpi_loss_percentages(marts: duckdb.DuckDBPyConnection) -> None:
+    (latest_pct, total_pct) = rows(
+        marts,
+        "select loss_latest_pct, loss_total_pct from marts.mart_area_kpis "
+        "where level = 'department' and code = '38' and threshold = 30",
+    )[0]
+    assert latest_pct == pytest.approx(30 / 1000)
+    assert total_pct == pytest.approx(60 / 1000)
+
+
 def test_loss_rates_and_rolling_metrics(marts: duckdb.DuckDBPyConnection) -> None:
     (pct, yoy, avg5) = rows(
         marts,
