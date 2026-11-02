@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import duckdb
+import pandas as pd
 
 
 @dataclass(frozen=True)
@@ -80,20 +81,27 @@ class Warehouse:
             pk = ", ".join(table.keys)
             self._con.execute(f"create table if not exists raw.{name} ({ddl}, primary key ({pk}))")
 
-    def upsert(self, table: str, rows: Iterable[Mapping[str, Any]], *, source_version: str) -> int:
+    def upsert(
+        self,
+        table: str,
+        rows: Iterable[Mapping[str, Any]] | pd.DataFrame,
+        *,
+        source_version: str,
+    ) -> int:
         """Insert rows, replacing existing rows with the same keys. Returns row count."""
         spec = RAW_TABLES[table]
         cols = list(spec.columns)
-        values = [(*(row[c] for c in cols), source_version) for row in rows]
-        if not values:
+        frame = rows if isinstance(rows, pd.DataFrame) else pd.DataFrame(list(rows), columns=cols)
+        if frame.empty:
             return 0
-        placeholders = ", ".join(["?"] * (len(cols) + 1))
-        self._con.executemany(
+        batch = frame[cols]  # noqa: F841 — referenced by name in the SQL below
+        casts = ", ".join(f"cast({c} as {t})" for c, t in spec.columns.items())
+        self._con.execute(
             f"insert or replace into raw.{table} ({', '.join(cols)}, _source_version, _loaded_at) "
-            f"values ({placeholders}, current_timestamp)",
-            values,
+            f"select {casts}, ?, current_timestamp from batch",
+            [source_version],
         )
-        return len(values)
+        return len(frame)
 
     def query(self, sql: str, params: list[Any] | None = None) -> list[tuple[Any, ...]]:
         return self._con.execute(sql, params or []).fetchall()

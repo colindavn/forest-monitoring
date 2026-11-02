@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import date
+from typing import Annotated
+
 import typer
 
 from forestfr.config import Settings
@@ -58,6 +61,28 @@ def extract_hansen_cmd() -> None:
         run_hansen(wh, GeeHansenSource(settings), settings.thresholds)
     finally:
         wh.close()
+
+
+@app.command("demo-data")
+def demo_data_cmd(
+    until: Annotated[
+        str | None, typer.Option(help="Last alert date (YYYY-MM-DD), default today.")
+    ] = None,
+) -> None:
+    """Write SYNTHETIC Hansen and alert rows for local development (never publish)."""
+    from forestfr.demo import NoBoundariesError, generate
+
+    settings = Settings.from_env()
+    wh = Warehouse(settings.warehouse_path)
+    try:
+        counts = generate(wh, until=date.fromisoformat(until) if until else date.today())
+    except NoBoundariesError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    finally:
+        wh.close()
+    for table, n in counts.items():
+        typer.echo(f"raw.{table}: {n} synthetic rows")
 
 
 if __name__ == "__main__":
