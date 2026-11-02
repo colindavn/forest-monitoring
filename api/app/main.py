@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import Database
-from app.routes import areas, health, series
+from app.routes import areas, health, maps, series
 
 API_PREFIX = "/api"
 
@@ -20,7 +20,7 @@ def create_app(warehouse_path: Path, web_origin: str = "http://localhost:5173") 
     app.add_middleware(
         CORSMiddleware, allow_origins=[web_origin], allow_methods=["GET"], allow_headers=["*"]
     )
-    for module in (health, areas, series):
+    for module in (health, areas, series, maps):
         app.include_router(module.router, prefix=API_PREFIX)
     return app
 
