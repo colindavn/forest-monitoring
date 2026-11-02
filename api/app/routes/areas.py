@@ -1,21 +1,13 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter
 
 from app.db import Database, Db
+from app.params import Threshold, area_or_404, check_threshold
 
 router = APIRouter(prefix="/areas")
-
-Threshold = Annotated[int, Query(description="Forest threshold (% tree cover 2000)")]
-THRESHOLDS = (10, 30, 50)
-
-
-def check_threshold(threshold: int) -> int:
-    if threshold not in THRESHOLDS:
-        raise HTTPException(status_code=422, detail=f"threshold must be one of {THRESHOLDS}")
-    return threshold
 
 
 def kpis(db: Database, threshold: int, where: str, params: list[Any]) -> list[dict[str, Any]]:
@@ -26,11 +18,9 @@ def kpis(db: Database, threshold: int, where: str, params: list[Any]) -> list[di
     )
 
 
-def area_or_404(db: Database, threshold: int, level: str, code: str) -> dict[str, Any]:
-    found = kpis(db, threshold, "level = ? and code = ?", [level, code])
-    if not found:
-        raise HTTPException(status_code=404, detail=f"Unknown {level} code {code!r}")
-    return found[0]
+def parent_ref(db: Database, threshold: int, level: str, code: str) -> dict[str, Any]:
+    p = area_or_404(db, threshold, level, code)
+    return {"level": level, "code": p["code"], "name": p["name"]}
 
 
 @router.get("/france")
@@ -40,11 +30,6 @@ def france(db: Db, threshold: Threshold = 30) -> dict[str, Any]:
         "area": area_or_404(db, threshold, "france", "FR"),
         "children": kpis(db, threshold, "level = 'region'", []),
     }
-
-
-def parent_ref(db: Database, threshold: int, level: str, code: str) -> dict[str, Any]:
-    p = area_or_404(db, threshold, level, code)
-    return {"level": level, "code": p["code"], "name": p["name"]}
 
 
 @router.get("/regions/{code}")
