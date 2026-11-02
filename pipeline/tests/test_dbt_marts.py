@@ -1,143 +1,21 @@
-"""dbt build on a tiny hand-made warehouse; expected values computed by hand.
-
-Areas: régions 84 (départements 38, 01) and 94 (département 2A).
-Threshold 30 forest: 38 = 1000 ha, 01 = 500 ha, 2A = 200 ha.
-Loss (ha):      2001  2002  2003
-    38            10    20    30
-    01             5     —    15     (2002 missing → zero-filled)
-    2A             —     4     —
-"""
+"""dbt build on the hand-made fixture warehouse (see `forestfr.fixtures` for the data)."""
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator
-from datetime import date, timedelta
-from pathlib import Path
+from datetime import date
 from typing import Any
 
 import duckdb
 import pytest
-from dbt.cli.main import dbtRunner
-from shapely.geometry import box
 
-from forestfr.load import Warehouse
-
-DBT_DIR = Path(__file__).resolve().parents[2] / "dbt"
-
-
-def seed(wh: Warehouse) -> None:
-    areas = [
-        (1, "84", "FR", "Auvergne-Rhône-Alpes"),
-        (1, "94", "FR", "Corse"),
-        (2, "38", "84", "Isère"),
-        (2, "01", "84", "Ain"),
-        (2, "2A", "94", "Corse-du-Sud"),
-    ]
-    wh.upsert(
-        "admin_areas",
-        [
-            {
-                "country": "FR",
-                "admin_level": lvl,
-                "code": code,
-                "parent_code": parent,
-                "name": name,
-                "area_km2": 100.0,
-                "geom_wkb": box(0, 0, 1, 1).wkb,
-            }
-            for lvl, code, parent, name in areas
-        ],
-        source_version="test",
-    )
-    extent = {"38": 1000.0, "01": 500.0, "2A": 200.0}
-    wh.upsert(
-        "hansen_forest_extent",
-        [
-            {"country": "FR", "code": c, "threshold": 30, "forest_2000_ha": v}
-            for c, v in extent.items()
-        ],
-        source_version="test",
-    )
-    loss = [("38", 2001, 10), ("38", 2002, 20), ("38", 2003, 30)]
-    loss += [("01", 2001, 5), ("01", 2003, 15), ("2A", 2002, 4)]
-    wh.upsert(
-        "hansen_loss",
-        [
-            {"country": "FR", "code": c, "threshold": 30, "year": y, "loss_ha": float(v)}
-            for c, y, v in loss
-        ],
-        source_version="test",
-    )
-    wh.upsert("dist_alerts_day", alert_rows(), source_version="test")
-
-
-ALERT_WEEKS = [date(2025, 1, 6) + timedelta(weeks=i) for i in range(4)]  # Mondays
-
-
-def alert_rows() -> list[dict[str, Any]]:
-    """Département 38: on Monday + Wednesday of 4 consecutive weeks.
-
-    Monday: nominal 1 ha; Wednesday: high 2 ha + highest 3 ha → 6 ha per week,
-    except week 3 (index 2) which has no alerts.
-    """
-    rows = []
-    for i, monday in enumerate(ALERT_WEEKS):
-        if i == 2:
-            continue
-        wed = monday + timedelta(days=2)
-        for day, conf, area in ((monday, 2, 1.0), (wed, 3, 2.0), (wed, 4, 3.0)):
-            rows.append(
-                {
-                    "country": "FR",
-                    "code": "38",
-                    "threshold": 30,
-                    "alert_date": day,
-                    "confidence_code": conf,
-                    "area_ha": area,
-                }
-            )
-    rows.extend(
-        {
-            "country": "FR",
-            "code": "2A",
-            "threshold": 30,
-            "alert_date": day,
-            "confidence_code": 3,
-            "area_ha": area,
-        }
-        for day, area in ANOMALY_HISTORY.items()
-    )
-    return rows
-
-
-# Département 2A, ISO week 2 of three years: 2 ha, 4 ha, then 20 ha in 2025.
-# z(2025) = (20 - mean(2, 4)) / stddev_samp(2, 4) = 17 / sqrt(2)
-ANOMALY_HISTORY = {date(2023, 1, 9): 2.0, date(2024, 1, 8): 4.0, ALERT_WEEKS[0]: 20.0}
+from forestfr.fixtures import ALERT_WEEKS, build_fixture_warehouse
 
 
 @pytest.fixture(scope="module")
 def marts(tmp_path_factory: pytest.TempPathFactory) -> Iterator[duckdb.DuckDBPyConnection]:
-    path = tmp_path_factory.mktemp("dbt") / "wh.duckdb"
-    wh = Warehouse(path)
-    seed(wh)
-    wh.close()
-
-    os.environ["WAREHOUSE_PATH"] = str(path)
-    result = dbtRunner().invoke(
-        [
-            "build",
-            "--project-dir",
-            str(DBT_DIR),
-            "--profiles-dir",
-            str(DBT_DIR),
-            "--vars",
-            "{expected_department_count: 3, today: '2025-02-28'}",
-            "--quiet",
-        ]
-    )
-    assert result.success, result.exception
-    con = duckdb.connect(str(path))  # dbt-duckdb keeps a read-write handle open in-process
+    path = build_fixture_warehouse(tmp_path_factory.mktemp("dbt") / "wh.duckdb")
+    con = duckdb.connect(str(path), read_only=True)
     yield con
     con.close()
 
