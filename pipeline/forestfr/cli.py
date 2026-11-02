@@ -43,5 +43,22 @@ def extract_boundaries_cmd() -> None:
     typer.echo(f"GEE upload started (task {task_id}).")
 
 
+@extract_app.command("hansen")
+def extract_hansen_cmd() -> None:
+    """Compute Hansen forest extent and annual loss per département in GEE (all thresholds)."""
+    settings = Settings.from_env()
+    if not settings.gee_project:
+        typer.echo("GEE_PROJECT is not set (see docs/SETUP_CREDENTIALS.md).", err=True)
+        raise typer.Exit(code=1)
+    from forestfr.gee import GeeHansenSource
+    from forestfr.hansen import run_hansen
+
+    wh = Warehouse(settings.warehouse_path)
+    try:
+        run_hansen(wh, GeeHansenSource(settings), settings.thresholds)
+    finally:
+        wh.close()
+
+
 if __name__ == "__main__":
     app()
