@@ -18,7 +18,8 @@ models:
     description: Metropolitan départements, one row per département.
     data_tests:
       - dbt_utils.expression_is_true:
-          expression: "(select count(*) from {{ ref('stg_admin__departments') }}) = {{ var('expected_department_count') }}"
+          arguments:
+            expression: "(select count(*) from {{ ref('stg_admin__departments') }}) = {{ var('expected_department_count') }}"
     columns:
       - name: code
         description: INSEE département code (string, e.g. "01", "2A").

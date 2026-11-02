@@ -85,5 +85,30 @@ def demo_data_cmd(
         typer.echo(f"raw.{table}: {n} synthetic rows")
 
 
+@app.command("check-release")
+def check_release_cmd() -> None:
+    """Fail if the warehouse contains SYNTHETIC rows (guard before publishing a release)."""
+    from forestfr.demo import SYNTHETIC
+    from forestfr.load import RAW_TABLES
+
+    settings = Settings.from_env()
+    wh = Warehouse(settings.warehouse_path)
+    try:
+        found = {
+            table: wh.query(
+                f"select count(*) from raw.{table} where _source_version = ?", [SYNTHETIC]
+            )[0][0]
+            for table in RAW_TABLES
+        }
+    finally:
+        wh.close()
+    bad = {t: n for t, n in found.items() if n}
+    for table, n in bad.items():
+        typer.echo(f"raw.{table}: {n} {SYNTHETIC} rows", err=True)
+    if bad:
+        raise typer.Exit(code=1)
+    typer.echo("No synthetic rows: warehouse can be published.")
+
+
 if __name__ == "__main__":
     app()
