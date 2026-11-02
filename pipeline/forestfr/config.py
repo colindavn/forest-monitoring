@@ -29,13 +29,20 @@ class Settings:
     gee_project: str | None = None
     gfw_api_key: str | None = field(default=None, repr=False)
     web_geo_dir: Path = REPO_ROOT / "web" / "public" / "geo"
+    download_dir: Path = REPO_ROOT / "data" / "downloads"
 
     @classmethod
     def from_env(cls) -> Settings:
         load_dotenv(REPO_ROOT / ".env")
-        wh = os.getenv("WAREHOUSE_PATH")
+
+        def path(var: str, default: Path) -> Path:
+            value = os.getenv(var)
+            return REPO_ROOT / value if value else default  # absolute values win over REPO_ROOT
+
         return cls(
-            warehouse_path=(REPO_ROOT / wh) if wh else cls.warehouse_path,
+            warehouse_path=path("WAREHOUSE_PATH", cls.warehouse_path),
+            web_geo_dir=path("WEB_GEO_DIR", cls.web_geo_dir),
+            download_dir=path("DOWNLOAD_DIR", cls.download_dir),
             thresholds=_thresholds(os.getenv("FOREST_THRESHOLDS", "10,30,50")),
             default_threshold=int(os.getenv("FOREST_THRESHOLD", "30")),
             gee_project=os.getenv("GEE_PROJECT") or None,
