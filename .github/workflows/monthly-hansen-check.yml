@@ -1,0 +1,38 @@
+name: Monthly Hansen version check
+
+# Checks the public GEE catalog for a newer Hansen Global Forest Change release and opens
+# an issue when one exists (Hansen zonal stats run locally: `make hansen transform`).
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Look for the next Hansen release in the GEE catalog
+        id: check
+        run: |
+          current=$(grep -oP 'global_forest_change_\K[0-9]{4}_v1_[0-9]+' pipeline/forestfr/gee.py)
+          year=${current%%_*}; minor=${current##*_}
+          next="$((year + 1))_v1_$((minor + 1))"
+          url="https://developers.google.com/earth-engine/datasets/catalog/UMD_hansen_global_forest_change_${next}"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+          echo "current=$current next=$next status=$code"
+          if [ "$code" = "200" ]; then echo "found=$next" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Open an issue
+        if: steps.check.outputs.found != ''
+        run: |
+          title="New Hansen release available: ${{ steps.check.outputs.found }}"
+          if ! gh issue list --state open --search "$title" --json number -q '.[0].number' | grep -q .; then
+            gh issue create --title "$title" --body "Update \`HANSEN_ASSET\` in \`pipeline/forestfr/gee.py\`, then run \`make hansen transform\` locally and publish the warehouse."
+          fi

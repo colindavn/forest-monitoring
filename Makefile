@@ -1,4 +1,4 @@
-.PHONY: setup lint test boundaries hansen alerts demo-data transform docs api web all check-release
+.PHONY: setup lint test boundaries hansen alerts demo-data transform docs api web all check-release publish
 
 DBT_FLAGS = --project-dir dbt --profiles-dir dbt
 
@@ -37,6 +37,11 @@ docs:
 
 check-release:
 	uv run forestfr check-release
+
+# Upload the local warehouse as the `warehouse-latest` release asset (after `make hansen`).
+publish: check-release
+	gh release view warehouse-latest || gh release create warehouse-latest --title "Warehouse (latest)" --notes "DuckDB warehouse." --latest=false
+	gh release upload warehouse-latest data/warehouse.duckdb --clobber
 
 api:
 	uv run uvicorn app.main:app_from_env --factory --app-dir api --reload --port 8000
