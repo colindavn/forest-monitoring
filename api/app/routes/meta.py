@@ -73,5 +73,5 @@ def meta(db: Db) -> dict[str, Any]:
         "latest_loss_year": db.scalar("select max(year) from marts.fct_loss_year"),
         "latest_alert_date": latest_alert.isoformat() if latest_alert else None,
         "synthetic": is_synthetic(db),
-        "dbt_docs_url": "dbt-docs/index.html",
+        "dbt_docs_url": "/dbt-docs/index.html",
     }

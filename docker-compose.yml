@@ -1,0 +1,21 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      WEB_ORIGIN: http://localhost:8080
+    volumes:
+      # Mount the local warehouse read-only; remove this line to download the latest release.
+      - ./data:/data:ro
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dbt/target:/usr/share/nginx/dbt-docs:ro
+    depends_on:
+      - api
+    restart: unless-stopped
