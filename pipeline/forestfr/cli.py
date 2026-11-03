@@ -63,6 +63,23 @@ def extract_hansen_cmd() -> None:
         wh.close()
 
 
+@extract_app.command("alerts")
+def extract_alerts_cmd() -> None:
+    """Incremental DIST-ALERT extract per département from the GFW Data API (all thresholds)."""
+    settings = Settings.from_env()
+    if not settings.gfw_api_key:
+        typer.echo("GFW_API_KEY is not set (see docs/SETUP_CREDENTIALS.md).", err=True)
+        raise typer.Exit(code=1)
+    from forestfr.alerts import GfwClient, run_alerts
+
+    wh = Warehouse(settings.warehouse_path)
+    try:
+        n = run_alerts(wh, GfwClient(settings.gfw_api_key), settings.thresholds)
+    finally:
+        wh.close()
+    typer.echo(f"raw.dist_alerts_day: {n} rows upserted")
+
+
 @app.command("demo-data")
 def demo_data_cmd(
     until: Annotated[
