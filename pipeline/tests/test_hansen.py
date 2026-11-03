@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from forestfr.hansen import parse_zonal_stats, run_hansen
+from forestfr.hansen import compare_with_reference, parse_zonal_stats, run_hansen
 from forestfr.load import Warehouse
 
 
@@ -40,6 +40,20 @@ def test_parse_maps_lossyear_codes_to_calendar_years() -> None:
         ("38", 2001, 120.5),
         ("38", 2022, 900.0),
     ]
+
+
+def test_france_total_within_5_percent_of_reference_passes() -> None:
+    check = compare_with_reference(total_ha=1_040_000, reference_ha=1_000_000)
+
+    assert check.ok
+    assert check.diff_pct == pytest.approx(4.0)
+
+
+def test_france_total_outside_tolerance_fails() -> None:
+    check = compare_with_reference(total_ha=900_000, reference_ha=1_000_000)
+
+    assert not check.ok
+    assert check.diff_pct == pytest.approx(-10.0)
 
 
 class FakeSource:

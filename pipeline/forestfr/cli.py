@@ -47,8 +47,16 @@ def extract_boundaries_cmd() -> None:
 
 
 @extract_app.command("hansen")
-def extract_hansen_cmd() -> None:
+def extract_hansen_cmd(
+    reference_ha: Annotated[
+        float | None,
+        typer.Option(help="GFW France total loss 2001-latest (ha) at 30 %, for the ±5 % check."),
+    ] = None,
+) -> None:
     """Compute Hansen forest extent and annual loss per département in GEE (all thresholds)."""
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     settings = Settings.from_env()
     if not settings.gee_project:
         typer.echo("GEE_PROJECT is not set (see docs/SETUP_CREDENTIALS.md).", err=True)
@@ -58,7 +66,8 @@ def extract_hansen_cmd() -> None:
 
     wh = Warehouse(settings.warehouse_path)
     try:
-        run_hansen(wh, GeeHansenSource(settings), settings.thresholds)
+        refs = {30: reference_ha} if reference_ha else None
+        run_hansen(wh, GeeHansenSource(settings), settings.thresholds, reference_ha=refs)
     finally:
         wh.close()
 
