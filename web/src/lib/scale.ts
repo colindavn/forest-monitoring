@@ -1,5 +1,8 @@
-/** ColorBrewer YlOrRd, 6 classes (sequential, colour-blind safe). */
-export const PALETTE = ['#ffffb2', '#fed976', '#feb24c', '#fd8d3c', '#f03b20', '#bd0026'] as const
+/**
+ * Single-hue blue sequential ramp, 6 classes (light → dark, colour-blind safe).
+ * Blue rather than YlOrRd so the pink/red GFW loss and alert pixels stay visible on top.
+ */
+export const PALETTE = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#104281'] as const
 export const NO_DATA_COLOR = '#d9d9d9'
 
 type Value = number | null | undefined

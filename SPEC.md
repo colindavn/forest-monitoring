@@ -287,7 +287,7 @@ Validation: 404 for unknown codes; 422 for bad params. CORS limited to the web o
   - "Alertes récentes (DIST-ALERT)" raster tiles, last 90 days by default.
   - Basemap: Plan IGN / Orthophoto IGN.
 - Tooltip on hover: name, metric value, rank.
-- Colour scales: sequential (e.g. YlOrRd) with classed breaks (quantiles, 6 classes); legend with units.
+- Colour scales: sequential single-hue **blue** ramp (`#cde2fb → #104281`) with classed breaks (quantiles, 6 classes); legend with units. Blue instead of YlOrRd so the pink/red GFW loss and alert pixels stay visible above the choropleth.
 
 ### 9.3 Panel content (for the selected area)
 1. KPI cards: forest 2000 (ha), loss latest year (ha and %), total loss since 2001, trend (↑/↓ with slope), alerts last 4 weeks (ha).
