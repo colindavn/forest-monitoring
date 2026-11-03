@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.0 — 2026-11-03 (M0–M4 code, synthetic data)
+
+Implementation choices that differ from or refine spec v1.1:
+
+- **Raw tables** use generic admin-level names: `raw.admin_areas`, `raw.hansen_forest_extent`, `raw.hansen_loss`, `raw.dist_alerts_day` (SPEC §15.12).
+- **Slugs** are computed in dbt (`slugify` macro) instead of seed CSVs.
+- **Choropleth palette**: single-hue blue instead of YlOrRd, so the pink/red GFW pixels stay visible.
+- **Alerts chart**: plots the 4-week rolling sum ÷ 4, a weekly average on the same scale as the bars. The KPI card still shows the 4-week sum.
+- **Hansen in GEE**: one `reduceRegion` per département (not one `reduceRegions` for all), so each request stays under the interactive time limit.
+- **Département polygons** are uploaded to GEE as a table export task from client-side geometries, simplified to ~10 m. This needs no GCS bucket.
+- **France ±5 % check**: `forestfr extract hansen --reference-ha <GFW figure>` logs the comparison.
+
 ## Spec v1.1 — 2026-11-02
 
 [VERIFY] items checked against live services. Differences from spec v1:

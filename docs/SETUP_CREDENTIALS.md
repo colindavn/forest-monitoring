@@ -17,13 +17,14 @@ Copy `.env.example` to `.env` first. `.env` is gitignored, so never commit it.
 4. Authenticate locally once: `uv run earthengine authenticate`. This opens a browser and stores a token in your user profile.
 5. Set `GEE_PROJECT=<your-project-id>` in `.env`.
 6. Upload the département polygons: `make boundaries`. This re-runs the IGN download and starts a GEE export task for `projects/<GEE_PROJECT>/assets/fr_departements`. Wait until the task shows **Completed** at https://code.earthengine.google.com/tasks (usually a few minutes).
-7. Compute the statistics:
+7. Look up France's total tree cover loss 2001–2025 at 30 % on the GFW dashboard (https://www.globalforestwatch.org/dashboards/country/FRA/). Then compute the statistics:
    ```bash
-   make hansen transform
+   uv run forestfr extract hansen --reference-ha <GFW figure in ha>
+   make transform
    ```
    - This computes 96 départements × 3 thresholds, one `reduceRegion` call each.
    - Expect roughly 15–45 minutes in total.
-   - Then check the France-wide total in the logs against the GFW France dashboard (±5 %).
+   - The log line `France total vs GFW at 30 %` must say `OK` (within ±5 %). Small differences are expected because GFW's France includes overseas départements and uses different boundaries. If it is far off, check the overseas share first.
 8. Publish the warehouse so the deployed API and the weekly CI job can use it: `make publish`. This needs `gh auth login`. It refuses to publish if any synthetic rows are present.
 
 > **Clearing demo data:** before loading real data, delete `data/warehouse.duckdb` (or run on a fresh clone). Then run `make boundaries hansen alerts transform`. Synthetic and real rows must not be mixed, and `make publish` blocks it.
