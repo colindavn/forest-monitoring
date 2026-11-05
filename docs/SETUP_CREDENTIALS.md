@@ -9,6 +9,10 @@ The app runs without credentials on **synthetic demo data** (`make demo-data`). 
 
 Copy `.env.example` to `.env` first. `.env` is gitignored, so never commit it.
 
+> **Start from an empty warehouse — once, before anything else.** If you ran `make demo-data`, delete `data/warehouse.duckdb` now, **before** step 6 below. Never delete it afterwards: it then holds your boundaries, Hansen and alert data. Synthetic and real rows must not be mixed (`make publish` refuses).
+
+Order of the real-data run: `make boundaries` → `extract hansen` → `make alerts` → `make transform`. Every step adds to the same `data/warehouse.duckdb`.
+
 ## 1. Google Earth Engine (Hansen statistics)
 
 1. Create a Google Cloud project at https://console.cloud.google.com/projectcreate (e.g. `forest-monitoring-fr`).
@@ -32,8 +36,6 @@ Copy `.env.example` to `.env` first. `.env` is gitignored, so never commit it.
    - Expect roughly 15–45 minutes in total.
    - The log line `France total vs GFW at 30 %` must say `OK` (within ±5 %). GFW's France (FRA) is metropolitan France incl. Corsica, the same area as here (overseas départements are separate countries in GFW). Small differences come from GFW's GADM boundaries vs IGN's. A large gap usually means a different threshold or year range on the dashboard.
 8. Publish the warehouse so the deployed API and the weekly CI job can use it: `make publish`. This needs `gh auth login`. It refuses to publish if any synthetic rows are present.
-
-> **Clearing demo data:** before loading real data, delete `data/warehouse.duckdb` (or run on a fresh clone). Then run `make boundaries hansen alerts transform`. Synthetic and real rows must not be mixed, and `make publish` blocks it.
 
 ### Optional: service account for CI (not needed in v1)
 
