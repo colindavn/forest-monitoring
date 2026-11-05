@@ -17,14 +17,20 @@ Copy `.env.example` to `.env` first. `.env` is gitignored, so never commit it.
 4. Authenticate locally once: `uv run earthengine authenticate`. This opens a browser and stores a token in your user profile.
 5. Set `GEE_PROJECT=<your-project-id>` in `.env`.
 6. Load the boundaries: `make boundaries`. Nothing is uploaded to GEE: each Hansen request carries its own département polygon, at most ~1.3 MB, well under GEE's 10 MB request limit.
-7. Look up France's total tree cover loss 2001–2025 at 30 % on the GFW dashboard (https://www.globalforestwatch.org/dashboards/country/FRA/). Then compute the statistics:
+7. *(Optional)* Find GFW's reference figure for the ±5 % sanity check:
+   1. Open https://www.globalforestwatch.org/dashboards/country/FRA/
+   2. In the **"Tree cover loss"** widget, check that canopy density is **30 %** and the years are **2001–2025**.
+   3. Read the total in the sentence "From 2001 to 2025, France lost X Mha of tree cover", or download the widget's CSV and sum the years.
+   4. Convert it to hectares: 1 Mha = 1,000,000 ha, 1 kha = 1,000 ha.
+
+   Then compute the statistics (leave out `--reference-ha` to skip the check):
    ```bash
    uv run forestfr extract hansen --reference-ha <GFW figure in ha>
    make transform
    ```
    - This computes 96 départements × 3 thresholds, one `reduceRegion` call each.
    - Expect roughly 15–45 minutes in total.
-   - The log line `France total vs GFW at 30 %` must say `OK` (within ±5 %). Small differences are expected because GFW's France includes overseas départements and uses different boundaries. If it is far off, check the overseas share first.
+   - The log line `France total vs GFW at 30 %` must say `OK` (within ±5 %). GFW's France (FRA) is metropolitan France incl. Corsica, the same area as here (overseas départements are separate countries in GFW). Small differences come from GFW's GADM boundaries vs IGN's. A large gap usually means a different threshold or year range on the dashboard.
 8. Publish the warehouse so the deployed API and the weekly CI job can use it: `make publish`. This needs `gh auth login`. It refuses to publish if any synthetic rows are present.
 
 > **Clearing demo data:** before loading real data, delete `data/warehouse.duckdb` (or run on a fresh clone). Then run `make boundaries hansen alerts transform`. Synthetic and real rows must not be mixed, and `make publish` blocks it.
