@@ -24,8 +24,9 @@ COUNTRY = "FR"
 BACKFILL_START = date(2023, 1, 1)
 REVISION_WINDOW = timedelta(days=30)  # alerts get confirmed / revised after first detection
 QUERY_TOLERANCE_DEG = 0.001  # ~100 m simplification for API geometries
-# GFW codes tree cover density 2000 thresholds as classes (SPEC §3.3).
-THRESHOLD_CLASS = {10: 1, 15: 2, 20: 3, 25: 4, 30: 5, 50: 6, 75: 7}
+# The tree cover field is stored as classes, but SQL filters take the threshold in percent
+# (10, 15, 20, 25, 30, 50, 75); a class code (e.g. 5) is rejected with a 500.
+ALLOWED_THRESHOLDS = (10, 15, 20, 25, 30, 50, 75)
 CONFIDENCE_CODE = {"nominal": 2, "high": 3, "highest": 4}
 RETRY_STATUS = {429, 500, 502, 503, 504}
 TOO_LARGE_STATUS = {413}
@@ -40,11 +41,13 @@ class NoDepartmentsError(RuntimeError):
 
 
 def build_sql(since: date, threshold: int) -> str:
+    if threshold not in ALLOWED_THRESHOLDS:
+        raise ValueError(f"Unsupported threshold {threshold}; allowed {ALLOWED_THRESHOLDS}")
     return (
         "SELECT umd_glad_dist_alerts__date, umd_glad_dist_alerts__confidence, "
         "SUM(area__ha) AS area__ha FROM results "
         f"WHERE umd_glad_dist_alerts__date >= '{since.isoformat()}' "
-        f"AND umd_tree_cover_density_2000__threshold >= {THRESHOLD_CLASS[threshold]} "
+        f"AND umd_tree_cover_density_2000__threshold >= {threshold} "
         "GROUP BY umd_glad_dist_alerts__date, umd_glad_dist_alerts__confidence"
     )
 

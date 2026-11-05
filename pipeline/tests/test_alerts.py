@@ -37,7 +37,8 @@ def wh(tmp_path: Path) -> Warehouse:
     return wh
 
 
-def api_rows(*rows: tuple[str, int, float]) -> dict[str, Any]:
+def api_rows(*rows: tuple[str, int | str, float]) -> dict[str, Any]:
+    """Shape of the live API response; confidence comes back as "nominal" / "high"."""
     return {
         "status": "success",
         "data": [
@@ -65,7 +66,7 @@ def client() -> GfwClient:
 def test_first_run_backfills_from_2023_with_forest_filter(wh: Warehouse) -> None:
     mock_version()
     route = respx.post(QUERY_URL).mock(
-        return_value=httpx.Response(200, json=api_rows(("2026-10-01", 3, 1.5)))
+        return_value=httpx.Response(200, json=api_rows(("2026-10-01", "high", 1.5)))
     )
 
     run_alerts(wh, client(), thresholds=(30,), today=date(2026, 11, 2))
@@ -74,7 +75,8 @@ def test_first_run_backfills_from_2023_with_forest_filter(wh: Warehouse) -> None
     body = json.loads(first.content)
     assert first.headers["x-api-key"] == "secret"
     assert "umd_glad_dist_alerts__date >= '2023-01-01'" in body["sql"]
-    assert "umd_tree_cover_density_2000__threshold >= 5" in body["sql"]  # 30 % → class 5
+    # The API takes the threshold in percent (it rejects the class code 5 with a 500).
+    assert "umd_tree_cover_density_2000__threshold >= 30" in body["sql"]
     assert body["geometry"]["type"] in {"Polygon", "MultiPolygon"}
     assert route.call_count == 2  # one per département
     assert wh.query(
