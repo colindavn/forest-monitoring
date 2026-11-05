@@ -2,6 +2,11 @@
 
 ## v0.1.1 — 2026-11-05
 
+- **Fix**: `make alerts` printed "0 rows upserted" on an empty warehouse. It now stops with an error when no départements are loaded.
+- **Fix**: `dbt build` now fails when the département count is not 96 (the old check passed on an empty table) or when Hansen data is missing for a threshold.
+- **Fix**: the GFW forest filter takes the threshold in percent (`>= 30`), not the class code (`>= 5`, rejected with a 500 error).
+- **Finding**: GFW DIST-ALERT queries only return alerts from 2025-09-24 onwards. This is about 13 months, the same in every dataset version, so the planned 2023+ backfill is not possible through this API. Confidence comes back as `nominal` / `high` text.
+
 - **Fix**: `make boundaries` failed with `EEException: Request payload size exceeds the limit: 10485760 bytes`. The GEE asset upload sent all 96 polygons (~20 MB) in one request. The upload step is removed: `extract hansen` now sends each département's geometry with its own request, each at most ~1.3 MB. `make boundaries` no longer needs GEE.
 
 ## v0.1.0 — 2026-11-03 (M0–M4 code, synthetic data)

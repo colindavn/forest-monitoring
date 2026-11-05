@@ -70,7 +70,11 @@ In France, satellite "tree cover loss" is **not deforestation**: France's forest
 - Access for stats: **GFW Data API** dataset `umd_glad_dist_alerts` queried with a département geometry (requires a free GFW API key, header `x-api-key`; queries without key → 403). **[VERIFIED 2026-11-02]**
   - Version: `latest` redirects (307) to a weekly version, e.g. `v20261031`. Resolve and store the concrete version.
   - Query: `POST /dataset/umd_glad_dist_alerts/{version}/query/json`, body `{"sql": "...", "geometry": <GeoJSON geometry>}`; table name in SQL is `results`.
-  - Fields: date `umd_glad_dist_alerts__date`, confidence `umd_glad_dist_alerts__confidence` (**2 = nominal, 3 = high, 4 = highest**), area `area__ha`, forest filter `umd_tree_cover_density_2000__threshold` (coded class: 1=10, 2=15, 3=20, 4=25, 5=30, 6=50, 7=75 %).
+  - Fields: date `umd_glad_dist_alerts__date`, confidence `umd_glad_dist_alerts__confidence`, area `area__ha`, forest filter `umd_tree_cover_density_2000__threshold`.
+  - **[RE-VERIFIED 2026-11-05 with a live key]** Query results differ from the field metadata:
+    - **Threshold filter:** takes the **percentage** (`>= 30`). The class code (`>= 5`) is rejected with a 500 error.
+    - **Confidence:** returned as text, `nominal` or `high`. No `highest` values were seen in Landes, Gironde or Vosges.
+    - **History:** queryable from **2025-09-24** only, about 13 months, in every dataset version. This is despite metadata that says 2020-12-31. A 2023+ backfill is not possible through this API.
 - Fallback access: OPERA `OPERA_L3_DIST-ALERT-HLS_V1` COGs from NASA LP DAAC via `earthaccess` (heavier; only if the GFW API route fails).
 - Store **per département × threshold × day × confidence** areas, keeping **3 confidence levels** (`nominal`, `high`, `highest`); weekly rollups are done in dbt.
 
