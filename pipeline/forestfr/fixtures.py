@@ -119,5 +119,7 @@ def build_fixture_warehouse(path: Path, source_version: str = "test") -> Path:
     wh = Warehouse(path)
     seed(wh, source_version)
     wh.close()
-    run_dbt_build(path, f"{{expected_department_count: 3, today: '{FIXTURE_TODAY}'}}")
+    run_dbt_build(
+        path, f"{{expected_department_count: 3, thresholds: [30], today: '{FIXTURE_TODAY}'}}"
+    )
     return path

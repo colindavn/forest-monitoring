@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import duckdb
 import pytest
 
-from forestfr.fixtures import ALERT_WEEKS, build_fixture_warehouse
+from forestfr.fixtures import ALERT_WEEKS, build_fixture_warehouse, run_dbt_build
+from forestfr.load import Warehouse
 
 
 @pytest.fixture(scope="module")
@@ -18,6 +20,17 @@ def marts(tmp_path_factory: pytest.TempPathFactory) -> Iterator[duckdb.DuckDBPyC
     con = duckdb.connect(str(path), read_only=True)
     yield con
     con.close()
+
+
+def test_dbt_build_fails_on_an_empty_warehouse(tmp_path: Path) -> None:
+    path = tmp_path / "empty.duckdb"
+    Warehouse(path).close()
+
+    with pytest.raises(RuntimeError) as failure:
+        run_dbt_build(path)
+
+    assert "assert_department_count" in str(failure.value)
+    assert "assert_hansen_loaded" in str(failure.value)
 
 
 def rows(con: duckdb.DuckDBPyConnection, sql: str) -> list[tuple[Any, ...]]:
