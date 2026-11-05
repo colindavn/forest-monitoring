@@ -97,9 +97,9 @@ export default function AlertsChart({ series }: { series: AlertPoint[] }) {
       <figcaption>Alertes de perturbation hebdomadaires (DIST-ALERT, en ha)</figcaption>
       <EChart option={option} label="Graphique des alertes hebdomadaires" height={300} />
       <p className="chart-note">
-        ▲ Anomalie : semaine dont la surface d’alertes dépasse de plus de 2 écarts-types la même
-        semaine des années précédentes ({anomalies.length} semaine
-        {anomalies.length > 1 ? 's' : ''}).
+        ▲ Anomalie : semaine dont la surface d’alertes dépasse de plus de 2 écarts-types la
+        référence (les 12 semaines précédentes, puis la même semaine des années précédentes dès 2
+        ans d’historique) — {anomalies.length} semaine{anomalies.length > 1 ? 's' : ''}.
       </p>
       <details>
         <summary>Voir les données en tableau</summary>

@@ -167,8 +167,9 @@ models:
 
   - name: mart_alert_anomalies
     description: >
-      Weekly alert area vs the same ISO week of previous years. The z-score is computed only
-      once at least 2 previous years exist; a week is an anomaly when z >= 2.
+      Weekly alert area vs a baseline; a week is an anomaly when z >= 2. Baseline = the same
+      ISO week of previous years once >= 2 previous years exist, otherwise the 12 previous
+      weeks (GFW serves DIST-ALERT history from 2025-09-24 only).
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -192,12 +193,18 @@ models:
         description: Alert area this week, all confidence levels (ha).
       - name: history_years
         description: Number of previous years with the same ISO week.
+      - name: baseline_method
+        description: same_week (>= 2 previous years) or rolling_12w; null when no baseline yet.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [same_week, rolling_12w]
       - name: baseline_mean_ha
-        description: Mean area of the same ISO week in previous years (ha).
+        description: Mean area of the baseline weeks (ha).
       - name: baseline_std_ha
-        description: Sample standard deviation of that baseline (ha).
+        description: Sample standard deviation of the baseline weeks (ha).
       - name: z_score
-        description: (area - baseline mean) / baseline std; null with < 2 years of history.
+        description: (area - baseline mean) / baseline std; null without a baseline or when std = 0.
       - name: is_anomaly
         description: True when z_score >= 2.
         data_tests: [not_null]

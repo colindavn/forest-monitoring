@@ -239,7 +239,7 @@ Naming: `stg_*` (1:1 cleaned sources), `int_*` (business logic), `fct_*`/`dim_*`
 | `fct_loss_year` | level × code × year | `level` ∈ {`france`,`region`,`department`}, `code`, `year`, `loss_ha`, `loss_pct_of_2000`, `cum_loss_ha`, `loss_ha_5y_avg`, `yoy_change_pct`. Région and France rows are **sums of département rows** (never recomputed from rasters) so drill-down totals always add up. |
 | `fct_alerts_week` | level × code × threshold × week | `area_ha_nominal`, `area_ha_high`, `area_ha_highest`, `area_ha_all`, `area_ha_high_conf`, `area_ha_4w_rolling` |
 | `mart_area_kpis` | level × code | latest-year loss, 5-yr average, 2001–latest total, % of 2000 forest lost, trend slope (linear regression on last 10 years), rank within parent level |
-| `mart_alert_anomalies` | level × code × week | z-score of weekly alert area vs same ISO week in previous years (only once ≥ 2 years of history), `is_anomaly` (z ≥ 2) |
+| `mart_alert_anomalies` | level × code × week | z-score of weekly alert area vs a baseline: same ISO week in previous years once ≥ 2 years of history exist, otherwise the **12 previous weeks** (owner decision 2026-11-05, since GFW history starts 2025-09-24); `baseline_method`, `is_anomaly` (z ≥ 2) |
 
 ### 7.4 Tests (dbt)
 - `unique` + `not_null` on all keys; `unique_combination_of_columns` on fact grains (dbt_utils).

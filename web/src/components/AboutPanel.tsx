@@ -34,12 +34,13 @@ export default function AboutPanel({ meta, threshold, onClose }: Props) {
         </li>
         <li>
           Alertes : DIST-ALERT (Landsat + Sentinel-2 harmonisés), perturbations de la végétation
-          restreintes aux pixels forestiers, agrégées par semaine ISO. Trois niveaux de confiance :
-          nominale, élevée, très élevée.
+          restreintes aux pixels forestiers, agrégées par semaine ISO. Niveaux de confiance fournis
+          par GFW : nominale et élevée. L’historique interrogeable commence le 24 septembre 2025.
         </li>
         <li>
-          Anomalie : semaine dont la surface d’alertes dépasse de 2 écarts-types la même semaine des
-          années précédentes (au moins 2 années d’historique).
+          Anomalie : semaine dont la surface d’alertes dépasse de 2 écarts-types la référence. La
+          référence est la moyenne des 12 semaines précédentes, puis, dès 2 années d’historique, la
+          même semaine des années précédentes.
         </li>
         <li>
           Sur la carte, le filtre de couvert des tuiles d’alertes GFW utilise le couvert arboré de
