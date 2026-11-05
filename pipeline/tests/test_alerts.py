@@ -8,7 +8,7 @@ import pytest
 import respx
 from shapely.geometry import box
 
-from forestfr.alerts import API, DATASET, GfwClient, run_alerts
+from forestfr.alerts import API, DATASET, GfwClient, NoDepartmentsError, run_alerts
 from forestfr.load import Warehouse
 
 VERSION = "v20261031"
@@ -103,6 +103,15 @@ def test_incremental_run_starts_30_days_before_latest_and_does_not_duplicate(
     second_sql = json.loads(route.calls[-1].request.content)["sql"]
     assert "umd_glad_dist_alerts__date >= '2026-09-02'" in second_sql  # 2026-10-02 - 30 days
     assert wh.query("select count(*) from raw.dist_alerts_day") == [(4,)]
+
+
+@respx.mock
+def test_refuses_to_run_without_departments(tmp_path: Path) -> None:
+    mock_version()
+    empty = Warehouse(tmp_path / "empty.duckdb")
+
+    with pytest.raises(NoDepartmentsError, match="extract boundaries"):
+        run_alerts(empty, client(), thresholds=(30,), today=date(2026, 11, 2))
 
 
 @respx.mock

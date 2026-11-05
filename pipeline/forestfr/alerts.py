@@ -35,6 +35,10 @@ class GeometryTooLargeError(RuntimeError):
     pass
 
 
+class NoDepartmentsError(RuntimeError):
+    pass
+
+
 def build_sql(since: date, threshold: int) -> str:
     return (
         "SELECT umd_glad_dist_alerts__date, umd_glad_dist_alerts__confidence, "
@@ -145,6 +149,10 @@ def run_alerts(
         "order by code",
         [COUNTRY],
     )
+    if not departments:
+        raise NoDepartmentsError(
+            f"No départements in {wh.path}: run `forestfr extract boundaries` first."
+        )
     total = 0
     for threshold in thresholds:
         since = since_for(wh, threshold)

@@ -84,11 +84,14 @@ def extract_alerts_cmd() -> None:
     if not settings.gfw_api_key:
         typer.echo("GFW_API_KEY is not set (see docs/SETUP_CREDENTIALS.md).", err=True)
         raise typer.Exit(code=1)
-    from forestfr.alerts import GfwClient, run_alerts
+    from forestfr.alerts import GfwClient, NoDepartmentsError, run_alerts
 
     wh = Warehouse(settings.warehouse_path)
     try:
         n = run_alerts(wh, GfwClient(settings.gfw_api_key), settings.thresholds)
+    except NoDepartmentsError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     finally:
         wh.close()
     typer.echo(f"raw.dist_alerts_day: {n} rows upserted")
