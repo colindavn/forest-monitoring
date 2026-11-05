@@ -50,4 +50,3 @@ def test_extract_boundaries_loads_raw_and_writes_web_geojson(
     regions = json.loads((env / "geo" / "regions.geojson").read_text(encoding="utf-8"))
     assert {f["properties"]["code"] for f in departments["features"]} == {"01", "05", "38"}
     assert {f["properties"]["code"] for f in regions["features"]} == {"84", "93"}
-    assert "GEE upload skipped" in result.output

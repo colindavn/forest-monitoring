@@ -25,7 +25,7 @@ def version() -> None:
 
 @extract_app.command("boundaries")
 def extract_boundaries_cmd() -> None:
-    """Download ADMIN-EXPRESS, load raw.admin_areas, write web GeoJSON, upload to GEE."""
+    """Download ADMIN-EXPRESS, load raw.admin_areas and write the web GeoJSON."""
     from forestfr.boundaries import extract_boundaries
 
     settings = Settings.from_env()
@@ -36,14 +36,6 @@ def extract_boundaries_cmd() -> None:
         wh.close()
     counts = areas.admin_level.value_counts().to_dict()
     typer.echo(f"Loaded {counts.get(1, 0)} régions and {counts.get(2, 0)} départements.")
-
-    if not settings.gee_project:
-        typer.echo("GEE upload skipped: GEE_PROJECT is not set (see docs/SETUP_CREDENTIALS.md).")
-        return
-    from forestfr.gee import upload_departments
-
-    task_id = upload_departments(settings, areas[areas.admin_level == 2])
-    typer.echo(f"GEE upload started (task {task_id}).")
 
 
 @extract_app.command("hansen")
@@ -61,13 +53,26 @@ def extract_hansen_cmd(
     if not settings.gee_project:
         typer.echo("GEE_PROJECT is not set (see docs/SETUP_CREDENTIALS.md).", err=True)
         raise typer.Exit(code=1)
+    from shapely import wkb
+
     from forestfr.gee import GeeHansenSource
     from forestfr.hansen import run_hansen
 
     wh = Warehouse(settings.warehouse_path)
     try:
+        departments = [
+            (code, wkb.loads(bytes(geom)))
+            for code, geom in wh.query(
+                "select code, geom_wkb from raw.admin_areas "
+                "where country = 'FR' and admin_level = 2 order by code"
+            )
+        ]
+        if not departments:
+            typer.echo("No départements loaded: run `forestfr extract boundaries` first.", err=True)
+            raise typer.Exit(code=1)
         refs = {30: reference_ha} if reference_ha else None
-        run_hansen(wh, GeeHansenSource(settings), settings.thresholds, reference_ha=refs)
+        source = GeeHansenSource(settings, departments)
+        run_hansen(wh, source, settings.thresholds, reference_ha=refs)
     finally:
         wh.close()
 

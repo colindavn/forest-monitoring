@@ -185,7 +185,7 @@ All extractors are **idempotent** (re-running replaces the same keys) and write 
 2. Source is already EPSG:4326; compute `area_km2` in EPSG:2154.
 3. Write `raw.admin_regions(insee_reg, nom, area_km2, geom_wkb)` and `raw.admin_departments(insee_dep, insee_reg, nom, area_km2, geom_wkb)`.
 4. Produce simplified `web/public/geo/regions.geojson` and `departments.geojson` with properties `code`, `name`, `parent_code`. Shared borders must stay aligned after simplification (use mapshaper/topojson).
-5. Upload full-resolution départements to GEE as `projects/<GEE_PROJECT>/assets/fr_departements`.
+5. ~~Upload full-resolution départements to GEE as an asset.~~ Dropped: a single upload request of all 96 polygons is ~20 MB, over GEE's 10 MB payload limit. Each Hansen `reduceRegion` request now carries its own département geometry (full detail, or simplified from ~10 m until it fits 2 MB; the largest is ~1.3 MB).
 
 ### 6.2 `hansen_zonal`
 For each département, compute with GEE (`reduceRegions`, `scale=30`, `ee.Reducer.sum()` on pixel area in ha, `tileScale` as needed):

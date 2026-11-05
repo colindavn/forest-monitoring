@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.1 — 2026-11-05
+
+- **Fix**: `make boundaries` failed with `EEException: Request payload size exceeds the limit: 10485760 bytes`. The GEE asset upload sent all 96 polygons (~20 MB) in one request. The upload step is removed: `extract hansen` now sends each département's geometry with its own request, each at most ~1.3 MB. `make boundaries` no longer needs GEE.
+
 ## v0.1.0 — 2026-11-03 (M0–M4 code, synthetic data)
 
 Implementation choices that differ from or refine spec v1.1:

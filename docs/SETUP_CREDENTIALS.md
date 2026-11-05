@@ -4,7 +4,7 @@ The app runs without credentials on **synthetic demo data** (`make demo-data`). 
 
 | What | Needed for | Where it goes |
 |---|---|---|
-| Google Earth Engine Cloud project | `make boundaries` (GEE upload step) and `make hansen` (yearly, run locally) | `.env` → `GEE_PROJECT` |
+| Google Earth Engine Cloud project | `make hansen` (yearly, run locally) | `.env` → `GEE_PROJECT` |
 | GFW Data API key | `make alerts` (weekly, locally or in CI) | `.env` → `GFW_API_KEY`, GitHub secret `GFW_API_KEY` |
 
 Copy `.env.example` to `.env` first. `.env` is gitignored, so never commit it.
@@ -16,7 +16,7 @@ Copy `.env.example` to `.env` first. `.env` is gitignored, so never commit it.
 3. Enable the Earth Engine API for the project: https://console.cloud.google.com/apis/library/earthengine.googleapis.com
 4. Authenticate locally once: `uv run earthengine authenticate`. This opens a browser and stores a token in your user profile.
 5. Set `GEE_PROJECT=<your-project-id>` in `.env`.
-6. Upload the département polygons: `make boundaries`. This re-runs the IGN download and starts a GEE export task for `projects/<GEE_PROJECT>/assets/fr_departements`. Wait until the task shows **Completed** at https://code.earthengine.google.com/tasks (usually a few minutes).
+6. Load the boundaries: `make boundaries`. Nothing is uploaded to GEE: each Hansen request carries its own département polygon, at most ~1.3 MB, well under GEE's 10 MB request limit.
 7. Look up France's total tree cover loss 2001–2025 at 30 % on the GFW dashboard (https://www.globalforestwatch.org/dashboards/country/FRA/). Then compute the statistics:
    ```bash
    uv run forestfr extract hansen --reference-ha <GFW figure in ha>
