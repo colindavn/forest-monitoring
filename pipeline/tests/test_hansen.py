@@ -12,19 +12,32 @@ VERSION = "UMD/hansen/global_forest_change_2025_v1_13"
 
 ISERE = {
     "code": "38",
-    "forest_2000_ha": 350_000.0,
     "groups": [
-        {"lossyear": 0, "sum": 349_000.0},  # 0 = no loss → ignored
+        {"lossyear": 0, "sum": 348_979.5},  # forest without loss
         {"lossyear": 1, "sum": 120.5},
         {"lossyear": 22, "sum": 900.0},
     ],
-}
+}  # forest 2000 = 350 000 ha
 
 
 def test_parse_extracts_forest_extent() -> None:
     extent, _ = parse_area_stats(ISERE, threshold=30)
 
     assert extent == {"country": "FR", "code": "38", "threshold": 30, "forest_2000_ha": 350_000.0}
+
+
+def test_forest_extent_is_the_sum_of_all_groups_including_no_loss() -> None:
+    extent, _ = parse_area_stats(ISERE, threshold=30)
+
+    assert extent["forest_2000_ha"] == pytest.approx(348_979.5 + 120.5 + 900.0)
+
+
+def test_missing_no_loss_group_is_rejected() -> None:
+    # Happens when lossyear is masked where 0: forest extent would equal total loss.
+    only_loss = {"code": "38", "groups": [{"lossyear": 1, "sum": 120.5}]}
+
+    with pytest.raises(ValueError, match="lossyear 0"):
+        parse_area_stats(only_loss, threshold=30)
 
 
 def test_parse_maps_lossyear_codes_to_calendar_years() -> None:
@@ -67,7 +80,8 @@ class FakeSource:
         if code == self.fail_on:
             raise RuntimeError("Computation timed out.")
         scale = {10: 1.2, 30: 1.0, 50: 0.7}[threshold]
-        return {**ISERE, "code": code, "forest_2000_ha": 350_000.0 * scale}
+        no_loss = {"lossyear": 0, "sum": 350_000.0 * scale - 1_020.5}
+        return {"code": code, "groups": [no_loss, *ISERE["groups"][1:]]}
 
 
 def test_run_hansen_loads_every_area_and_threshold(tmp_path: Path) -> None:

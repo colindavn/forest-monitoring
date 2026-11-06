@@ -75,7 +75,8 @@ class GeeHansenSource:
         hansen = ee.Image(HANSEN_ASSET)
         forest = hansen.select("treecover2000").gte(threshold)
         area_ha = ee.Image.pixelArea().divide(1e4).updateMask(forest).rename("area")
-        image = area_ha.addBands(hansen.select("lossyear"))
+        # lossyear is masked where 0 (no loss): unmask so forest without loss forms group 0.
+        image = area_ha.addBands(hansen.select("lossyear").unmask(0))
         reducer = ee.Reducer.sum().group(groupField=1, groupName="lossyear")
         result = image.reduceRegion(
             reducer=reducer,
@@ -84,6 +85,4 @@ class GeeHansenSource:
             maxPixels=1e11,
             tileScale=self.tile_scale,
         ).getInfo()
-        groups = result.get("groups", [])
-        # lossyear 0 = forest without loss, so the groups partition all forest pixels.
-        return {"code": code, "forest_2000_ha": sum(g["sum"] for g in groups), "groups": groups}
+        return {"code": code, "groups": result.get("groups", [])}

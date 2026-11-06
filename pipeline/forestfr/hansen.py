@@ -24,8 +24,9 @@ Row = dict[str, Any]
 class HansenSource(Protocol):
     """Computes zonal stats for one area at a time.
 
-    `area_stats` returns `{"code", "forest_2000_ha", "groups"}` where `groups` is a list
-    of `{"lossyear": int, "sum": ha}` from a grouped sum reducer. Must be thread-safe.
+    `area_stats` returns `{"code", "groups"}` where `groups` is a list of
+    `{"lossyear": int, "sum": ha}` from a grouped sum reducer over forest pixels,
+    including lossyear 0 (no loss). Must be thread-safe.
     """
 
     version: str
@@ -37,12 +38,20 @@ class HansenSource(Protocol):
 
 
 def parse_area_stats(props: dict[str, Any], threshold: int) -> tuple[Row, list[Row]]:
-    """Split one area's stats into a forest-extent row and loss rows (lossyear 0 ignored)."""
+    """Split one area's grouped stats into a forest-extent row and loss rows.
+
+    The `lossyear` groups partition all forest pixels (0 = no loss), so forest 2000 is
+    their total. A missing lossyear-0 group means lossyear was masked: rejected, because
+    forest extent would then silently equal total loss.
+    """
+    groups = props.get("groups", [])
+    if not any(int(g["lossyear"]) == 0 for g in groups):
+        raise ValueError(f"{props['code']}: no lossyear 0 group (forest without loss) in stats")
     base = {"country": COUNTRY, "code": str(props["code"]), "threshold": threshold}
-    extent = {**base, "forest_2000_ha": float(props["forest_2000_ha"])}
+    extent = {**base, "forest_2000_ha": float(sum(g["sum"] for g in groups))}
     loss = [
         {**base, "year": 2000 + int(g["lossyear"]), "loss_ha": float(g["sum"])}
-        for g in props.get("groups", [])
+        for g in groups
         if int(g["lossyear"]) != 0
     ]
     return extent, loss
