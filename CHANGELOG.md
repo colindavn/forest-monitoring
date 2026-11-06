@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.2 — 2026-11-06
+
+- **Fix**: `extract hansen` ran silently for hours. It ran sequentially with no output until all 96 départements of a threshold were done, and one request hung.
+  - It now runs 8 requests in parallel (`--workers`): about 1 minute per threshold.
+  - It logs progress per département.
+  - It saves each département as soon as it finishes and skips those already loaded on a re-run.
+  - A failed département no longer loses the others.
+- **Fix**: forest 2000 extent was equal to total loss, because Hansen `lossyear` is masked where 0. `lossyear` is now unmasked, and stats without the no-loss group are rejected. First real run: forest 16.8 Mha, loss 1.63 Mha (+1.8 % vs GFW).
+
 ## v0.1.1 — 2026-11-05
 
 - **Fix**: `make alerts` printed "0 rows upserted" on an empty warehouse. It now stops with an error when no départements are loaded.
