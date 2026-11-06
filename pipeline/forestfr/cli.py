@@ -44,11 +44,17 @@ def extract_hansen_cmd(
         float | None,
         typer.Option(help="GFW France total loss 2001-latest (ha) at 30 %, for the ±5 % check."),
     ] = None,
+    workers: Annotated[int, typer.Option(help="Parallel Earth Engine requests.")] = 8,
 ) -> None:
-    """Compute Hansen forest extent and annual loss per département in GEE (all thresholds)."""
+    """Compute Hansen forest extent and annual loss per département in GEE (all thresholds).
+
+    Resumable: départements already loaded for this Hansen version are skipped.
+    """
     import logging
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    # force=True: libraries imported earlier may already have configured the root logger,
+    # which would silently swallow the progress lines.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", force=True)
     settings = Settings.from_env()
     if not settings.gee_project:
         typer.echo("GEE_PROJECT is not set (see docs/SETUP_CREDENTIALS.md).", err=True)
@@ -71,8 +77,16 @@ def extract_hansen_cmd(
             typer.echo("No départements loaded: run `forestfr extract boundaries` first.", err=True)
             raise typer.Exit(code=1)
         refs = {30: reference_ha} if reference_ha else None
+        typer.echo(
+            f"Computing Hansen stats for {len(departments)} départements, thresholds "
+            f"{list(settings.thresholds)} with {workers} parallel requests…"
+        )
         source = GeeHansenSource(settings, departments)
-        run_hansen(wh, source, settings.thresholds, reference_ha=refs)
+        try:
+            run_hansen(wh, source, settings.thresholds, reference_ha=refs, workers=workers)
+        except RuntimeError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1) from exc
     finally:
         wh.close()
 

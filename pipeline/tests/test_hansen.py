@@ -1,16 +1,14 @@
+import logging
+import threading
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from forestfr.hansen import compare_with_reference, parse_zonal_stats, run_hansen
+from forestfr.hansen import compare_with_reference, parse_area_stats, run_hansen
 from forestfr.load import Warehouse
 
-
-def fc(*features: dict[str, Any]) -> dict[str, Any]:
-    """Shape of `ee.FeatureCollection.getInfo()` output."""
-    return {"type": "FeatureCollection", "features": [{"properties": p} for p in features]}
-
+VERSION = "UMD/hansen/global_forest_change_2025_v1_13"
 
 ISERE = {
     "code": "38",
@@ -21,20 +19,16 @@ ISERE = {
         {"lossyear": 22, "sum": 900.0},
     ],
 }
-CORSE_SUD = {"code": "2A", "forest_2000_ha": 200_000.0, "groups": []}
 
 
-def test_parse_extracts_forest_extent_per_area() -> None:
-    extent, _ = parse_zonal_stats(fc(ISERE, CORSE_SUD), threshold=30)
+def test_parse_extracts_forest_extent() -> None:
+    extent, _ = parse_area_stats(ISERE, threshold=30)
 
-    assert extent == [
-        {"country": "FR", "code": "38", "threshold": 30, "forest_2000_ha": 350_000.0},
-        {"country": "FR", "code": "2A", "threshold": 30, "forest_2000_ha": 200_000.0},
-    ]
+    assert extent == {"country": "FR", "code": "38", "threshold": 30, "forest_2000_ha": 350_000.0}
 
 
 def test_parse_maps_lossyear_codes_to_calendar_years() -> None:
-    _, loss = parse_zonal_stats(fc(ISERE), threshold=30)
+    _, loss = parse_area_stats(ISERE, threshold=30)
 
     assert [(r["code"], r["year"], r["loss_ha"]) for r in loss] == [
         ("38", 2001, 120.5),
@@ -57,27 +51,65 @@ def test_france_total_outside_tolerance_fails() -> None:
 
 
 class FakeSource:
-    version = "UMD/hansen/global_forest_change_2025_v1_13"
+    """One département per call, like the GEE adapter; records calls (thread-safe)."""
 
-    def __init__(self) -> None:
-        self.calls: list[int] = []
+    version = VERSION
+    codes = ("38", "2A", "01")
 
-    def zonal_stats(self, threshold: int) -> dict[str, Any]:
-        self.calls.append(threshold)
+    def __init__(self, fail_on: str | None = None) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self.fail_on = fail_on
+        self._lock = threading.Lock()
+
+    def area_stats(self, code: str, threshold: int) -> dict[str, Any]:
+        with self._lock:
+            self.calls.append((code, threshold))
+        if code == self.fail_on:
+            raise RuntimeError("Computation timed out.")
         scale = {10: 1.2, 30: 1.0, 50: 0.7}[threshold]
-        return fc({**ISERE, "forest_2000_ha": 350_000.0 * scale})
+        return {**ISERE, "code": code, "forest_2000_ha": 350_000.0 * scale}
 
 
-def test_run_hansen_loads_every_threshold(tmp_path: Path) -> None:
+def test_run_hansen_loads_every_area_and_threshold(tmp_path: Path) -> None:
     wh = Warehouse(tmp_path / "wh.duckdb")
+
+    run_hansen(wh, FakeSource(), thresholds=(10, 30, 50), workers=2)
+
+    assert wh.query(
+        "select threshold, count(*), max(forest_2000_ha) from raw.hansen_forest_extent "
+        "group by 1 order by 1"
+    ) == [(10, 3, pytest.approx(420_000.0)), (30, 3, 350_000.0), (50, 3, pytest.approx(245_000.0))]
+    assert wh.query("select count(*), max(_source_version) from raw.hansen_loss") == [(18, VERSION)]
+
+
+def test_rerun_skips_areas_already_loaded_for_this_version(tmp_path: Path) -> None:
+    wh = Warehouse(tmp_path / "wh.duckdb")
+    run_hansen(wh, FakeSource(), thresholds=(30,), workers=1)
     source = FakeSource()
 
-    run_hansen(wh, source, thresholds=(10, 30, 50))
+    run_hansen(wh, source, thresholds=(10, 30), workers=1)
 
-    assert source.calls == [10, 30, 50]
-    assert wh.query(
-        "select threshold, forest_2000_ha from raw.hansen_forest_extent order by threshold"
-    ) == [(10, pytest.approx(420_000.0)), (30, 350_000.0), (50, pytest.approx(245_000.0))]
-    assert wh.query("select count(*), max(_source_version) from raw.hansen_loss") == [
-        (6, "UMD/hansen/global_forest_change_2025_v1_13")
+    assert sorted(source.calls) == [("01", 10), ("2A", 10), ("38", 10)]
+
+
+def test_a_failed_area_does_not_lose_the_others(tmp_path: Path) -> None:
+    wh = Warehouse(tmp_path / "wh.duckdb")
+
+    with pytest.raises(RuntimeError, match="1 of 3"):
+        run_hansen(wh, FakeSource(fail_on="2A"), thresholds=(30,), workers=2)
+
+    assert wh.query("select code from raw.hansen_forest_extent order by code") == [
+        ("01",),
+        ("38",),
     ]
+
+
+def test_progress_is_logged_per_area(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    wh = Warehouse(tmp_path / "wh.duckdb")
+
+    with caplog.at_level(logging.INFO, logger="forestfr.hansen"):
+        run_hansen(wh, FakeSource(), thresholds=(30,), workers=1)
+
+    progress = [r.getMessage() for r in caplog.records if "/3" in r.getMessage()]
+    assert len(progress) == 3
+    assert progress[-1].startswith("Hansen 30 %: 3/3")
